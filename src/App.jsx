@@ -7,7 +7,6 @@ import {
   Calendar,
   TrendingUp,
   TrendingDown,
-  Plus,
   Building2,
   Cloud,
   CloudOff,
@@ -22,19 +21,37 @@ import {
   Repeat,
   Filter,
   ExternalLink,
+  LogOut,
+  Lock,
+  Mail,
+  UserCheck,
+  Wallet,
+  ShieldCheck,
 } from "lucide-react";
 import { db, storage, isFirebaseConfigured } from "./firebase";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { collection, doc, setDoc, getDocs } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import * as pdfjsLib from "pdfjs-dist";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
-// Demo Data Only (Sanitized - No personal user records)
-const DEMO_USERS = [
+const BROKERAGES = [
+  "BRAC EPL Stock Brokerage Ltd.",
+  "LankaBangla Securities Ltd.",
+  "EBL Securities Ltd.",
+  "IDLC Securities Ltd.",
+  "City Brokerage Ltd.",
+  "UCB Stock Brokerage Ltd.",
+  "ICB Securities Trading Co. Ltd.",
+  "Universal DSE / CSE Broker",
+];
+
+const INITIAL_ACCOUNTS = [
   {
-    id: "demo_investor_1",
-    name: "Tanvir Hasan (Demo)",
+    id: "acc_tanvir_lb",
+    name: "Tanvir Hasan",
+    email: "tanvir@lankabangla.demo",
+    password: "password123",
     investorCode: "LB4092",
     boId: "1201950045128830",
     brokerage: "LankaBangla Securities Ltd.",
@@ -200,20 +217,69 @@ const DEMO_USERS = [
       },
     },
   },
+  {
+    id: "acc_nusrat_ebl",
+    name: "Nusrat Jahan",
+    email: "nusrat@eblsec.demo",
+    password: "password123",
+    investorCode: "EBL8814",
+    boId: "1203120088941205",
+    brokerage: "EBL Securities Ltd.",
+    records: {
+      "2026-11-22": {
+        date: "2026-11-22",
+        deposit: 40000.0,
+        availableBalance: 6250.0,
+        portfolioPdfName: "",
+        portfolioPdfUrl: "",
+        tradePdfName: "",
+        tradePdfUrl: "",
+        marginable: [
+          {
+            company: "MARICO",
+            gr: "A",
+            totalQty: 5,
+            salableQty: 5,
+            buyPrice: 2380.0,
+            sellPrice: 2425.0,
+            pe: 16.9,
+            history: [2350, 2365, 2380, 2395, 2410, 2425],
+          },
+        ],
+        nonMarginable: [
+          {
+            company: "WALTONHIL",
+            gr: "A",
+            totalQty: 6,
+            salableQty: 6,
+            buyPrice: 640.0,
+            sellPrice: 658.0,
+            pe: 19.4,
+            history: [630, 634, 640, 646, 652, 658],
+          },
+        ],
+        trades: [
+          {
+            date: "2026-11-22",
+            type: "BUY",
+            company: "MARICO",
+            gr: "A",
+            qty: 5,
+            buyPrice: 2380.0,
+            sellPrice: 2425.0,
+            comm: 47.6,
+          },
+        ],
+        sectors: [
+          { sector: "PHARMACEUTICALS & CHEMICALS", amount: 11900.0, pct: 75.6 },
+          { sector: "ENGINEERING", amount: 3840.0, pct: 24.4 },
+        ],
+        news: [],
+      },
+    },
+  },
 ];
 
-const BROKERAGES = [
-  "BRAC EPL Stock Brokerage Ltd.",
-  "LankaBangla Securities Ltd.",
-  "EBL Securities Ltd.",
-  "IDLC Securities Ltd.",
-  "City Brokerage Ltd.",
-  "UCB Stock Brokerage Ltd.",
-  "ICB Securities Trading Co. Ltd.",
-  "Universal DSE / CSE Broker",
-];
-
-// Interactive Share Price Increase/Decrease Graph Modal
 function ShareTrendModal({ share, onClose }) {
   if (!share) return null;
   const buy = Number(share.buyPrice || 0);
@@ -228,12 +294,12 @@ function ShareTrendModal({ share, onClose }) {
     share.history && share.history.length >= 2
       ? share.history
       : [
-          +(buy * 0.985).toFixed(2),
-          +(buy * 0.995).toFixed(2),
-          +buy.toFixed(2),
-          +((buy + sell) / 2).toFixed(2),
-          +sell.toFixed(2),
-        ];
+        +(buy * 0.985).toFixed(2),
+        +(buy * 0.995).toFixed(2),
+        +buy.toFixed(2),
+        +((buy + sell) / 2).toFixed(2),
+        +sell.toFixed(2),
+      ];
 
   const minVal = Math.min(...points) * 0.995;
   const maxVal = Math.max(...points) * 1.005;
@@ -432,7 +498,6 @@ function ShareTrendModal({ share, onClose }) {
   );
 }
 
-// Collapsible Folder Section
 function FolderSection({ title, badge, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -466,20 +531,430 @@ function FolderSection({ title, badge, defaultOpen = true, children }) {
 }
 
 export default function App() {
-  const [users, setUsers] = useState(() => {
-    const saved = localStorage.getItem("dse_multi_users_v3");
-    return saved ? JSON.parse(saved) : DEMO_USERS;
+  const [accounts, setAccounts] = useState(() => {
+    const saved = localStorage.getItem("dse_accounts_v4");
+    return saved ? JSON.parse(saved) : INITIAL_ACCOUNTS;
   });
 
-  const [currentUserId, setCurrentUserId] = useState(() => {
-    return localStorage.getItem("dse_active_user_id_v3") || DEMO_USERS[0].id;
+  const [loggedInUserId, setLoggedInUserId] = useState(() => {
+    return localStorage.getItem("dse_logged_in_user_v4") || null;
   });
+
+  const [authMode, setAuthMode] = useState("login");
+  const [loginEmail, setLoginEmail] = useState("tanvir@lankabangla.demo");
+  const [loginPassword, setLoginPassword] = useState("password123");
+  const [authError, setAuthError] = useState("");
+
+  const [regName, setRegName] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regCode, setRegCode] = useState("");
+  const [regBoId, setRegBoId] = useState("");
+  const [regBroker, setRegBroker] = useState(BROKERAGES[0]);
+  const [regDeposit, setRegDeposit] = useState("0");
 
   const currentUser = useMemo(
-    () => users.find((u) => u.id === currentUserId) || users[0],
-    [users, currentUserId],
+    () => accounts.find((u) => u.id === loggedInUserId) || null,
+    [accounts, loggedInUserId],
   );
 
+  useEffect(() => {
+    localStorage.setItem("dse_accounts_v4", JSON.stringify(accounts));
+  }, [accounts]);
+
+  useEffect(() => {
+    if (loggedInUserId) {
+      localStorage.setItem("dse_logged_in_user_v4", loggedInUserId);
+    } else {
+      localStorage.removeItem("dse_logged_in_user_v4");
+    }
+  }, [loggedInUserId]);
+
+  const [syncStatus, setSyncStatus] = useState(
+    isFirebaseConfigured ? "Firebase Connected" : "Local Storage Mode",
+  );
+  const [uploadNotice, setUploadNotice] = useState("");
+
+  useEffect(() => {
+    async function loadAccountsFromFirebase() {
+      if (!isFirebaseConfigured || !db) return;
+      try {
+        setSyncStatus("Loading Firebase Profiles...");
+        const snap = await getDocs(collection(db, "dse_users"));
+        if (!snap.empty) {
+          const cloudUsers = [];
+          snap.forEach((d) => cloudUsers.push(d.data()));
+          setAccounts((prev) => {
+            const merged = [...prev];
+            for (const cu of cloudUsers) {
+              const idx = merged.findIndex(
+                (m) => m.id === cu.id || m.email === cu.email,
+              );
+              if (idx >= 0) merged[idx] = cu;
+              else merged.push(cu);
+            }
+            return merged;
+          });
+        }
+        setSyncStatus("Synced with Firebase");
+      } catch (err) {
+        console.warn("Firestore load note:", err);
+        setSyncStatus("Firebase Ready");
+      }
+    }
+    loadAccountsFromFirebase();
+  }, []);
+
+  const saveAccountToFirebase = async (accObj) => {
+    if (!isFirebaseConfigured || !db) return;
+    try {
+      setSyncStatus("Saving to Firebase...");
+      await setDoc(doc(db, "dse_users", accObj.id), accObj);
+      setSyncStatus("Synced with Firebase");
+    } catch (err) {
+      console.error("Firestore save error:", err);
+      setSyncStatus("Firebase Sync Error");
+    }
+  };
+
+  const handleLoginSubmit = (e) => {
+    e.preventDefault();
+    setAuthError("");
+    const found = accounts.find(
+      (u) =>
+        u.email.toLowerCase() === loginEmail.trim().toLowerCase() &&
+        u.password === loginPassword,
+    );
+    if (!found) {
+      setAuthError("Invalid email or password.");
+      return;
+    }
+    setLoggedInUserId(found.id);
+    saveAccountToFirebase(found);
+  };
+
+  const handleRegisterSubmit = async (e) => {
+    e.preventDefault();
+    setAuthError("");
+    if (
+      !regName.trim() ||
+      !regEmail.trim() ||
+      !regPassword.trim() ||
+      !regCode.trim()
+    ) {
+      setAuthError("Please fill in Name, Email, Password, and Investor Code.");
+      return;
+    }
+    const exists = accounts.some(
+      (u) => u.email.toLowerCase() === regEmail.trim().toLowerCase(),
+    );
+    if (exists) {
+      setAuthError(
+        "An account with this email already exists. Please sign in.",
+      );
+      return;
+    }
+
+    const newId = "acc_" + Date.now();
+    const today = new Date().toISOString().split("T")[0];
+    const initialDeposit = parseFloat(regDeposit) || 0;
+
+    const newAcc = {
+      id: newId,
+      name: regName.trim(),
+      email: regEmail.trim().toLowerCase(),
+      password: regPassword,
+      investorCode: regCode.trim().toUpperCase(),
+      boId: regBoId.trim() || "1200000000000000",
+      brokerage: regBroker,
+      records: {
+        [today]: {
+          date: today,
+          deposit: initialDeposit,
+          availableBalance: initialDeposit,
+          portfolioPdfName: "",
+          portfolioPdfUrl: "",
+          tradePdfName: "",
+          tradePdfUrl: "",
+          marginable: [],
+          nonMarginable: [],
+          trades: [],
+          sectors: [],
+          news: [],
+        },
+      },
+    };
+
+    setAccounts((prev) => [...prev, newAcc]);
+    await saveAccountToFirebase(newAcc);
+    setLoggedInUserId(newId);
+    setRegName("");
+    setRegEmail("");
+    setRegPassword("");
+    setRegCode("");
+    setRegBoId("");
+    setRegDeposit("0");
+  };
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
+        <div className="max-w-4xl w-full bg-white rounded-2xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 border border-slate-200">
+          <div className="md:col-span-5 bg-slate-900 text-white p-6 sm:p-8 flex flex-col justify-between space-y-6">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-full text-xs font-semibold">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>
+                  {isFirebaseConfigured
+                    ? "Firebase Cloud Secured"
+                    : "Multi-User Workspace"}
+                </span>
+              </div>
+              <h1 className="text-2xl font-black leading-snug">
+                DSE Portfolio & Trade Analyzer
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Sign in or register your personal investor account to manage
+                your deposits, full share holdings, daily trades, and PDF
+                statements securely.
+              </p>
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-400 border-t border-slate-800 pt-4">
+              <div className="flex items-center justify-between">
+                <span>Demo Login:</span>
+                <span className="text-slate-200 font-mono">
+                  tanvir@lankabangla.demo
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Demo Password:</span>
+                <span className="text-slate-200 font-mono">password123</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="md:col-span-7 p-6 sm:p-8 space-y-5">
+            <div className="grid grid-cols-2 bg-slate-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("login");
+                  setAuthError("");
+                }}
+                className={`py-2 rounded-lg text-xs sm:text-sm font-bold transition ${authMode === "login"
+                    ? "bg-slate-900 text-white shadow"
+                    : "text-slate-600 hover:text-slate-900"
+                  }`}
+              >
+                Login (Sign In)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("register");
+                  setAuthError("");
+                }}
+                className={`py-2 rounded-lg text-xs sm:text-sm font-bold transition ${authMode === "register"
+                    ? "bg-slate-900 text-white shadow"
+                    : "text-slate-600 hover:text-slate-900"
+                  }`}
+              >
+                Register New Account
+              </button>
+            </div>
+
+            {authError && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-xl font-medium">
+                {authError}
+              </div>
+            )}
+
+            {authMode === "login" ? (
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Email Address
+                  </label>
+                  <div className="flex items-center gap-2 border border-slate-300 rounded-xl px-3 py-2.5 focus-within:border-blue-600">
+                    <Mail className="w-4 h-4 text-slate-400" />
+                    <input
+                      type="email"
+                      required
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder="investor@example.com"
+                      className="w-full text-sm focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Password
+                  </label>
+                  <div className="flex items-center gap-2 border border-slate-300 rounded-xl px-3 py-2.5 focus-within:border-blue-600">
+                    <Lock className="w-4 h-4 text-slate-400" />
+                    <input
+                      type="password"
+                      required
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full text-sm focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition shadow-md"
+                >
+                  Enter My Profile
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleRegisterSubmit} className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                      placeholder="Investor Name"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      placeholder="you@domain.com"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Password *
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      placeholder="Min 6 chars"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Investor Code *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={regCode}
+                      onChange={(e) => setRegCode(e.target.value)}
+                      placeholder="e.g. BR8576"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Initial Deposit (Tk.)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={regDeposit}
+                      onChange={(e) => setRegDeposit(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      BO ID
+                    </label>
+                    <input
+                      type="text"
+                      value={regBoId}
+                      onChange={(e) => setRegBoId(e.target.value)}
+                      placeholder="16-digit BO ID"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Brokerage House
+                    </label>
+                    <select
+                      value={regBroker}
+                      onChange={(e) => setRegBroker(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
+                    >
+                      {BROKERAGES.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-sm transition shadow-md mt-2"
+                >
+                  Create Account & Save to Firebase
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <AuthenticatedWorkspace
+      currentUser={currentUser}
+      setAccounts={setAccounts}
+      saveAccountToFirebase={saveAccountToFirebase}
+      onLogout={() => setLoggedInUserId(null)}
+      syncStatus={syncStatus}
+      setSyncStatus={setSyncStatus}
+      uploadNotice={uploadNotice}
+      setUploadNotice={setUploadNotice}
+    />
+  );
+}
+
+function AuthenticatedWorkspace({
+  currentUser,
+  setAccounts,
+  saveAccountToFirebase,
+  onLogout,
+  syncStatus,
+  setSyncStatus,
+  uploadNotice,
+  setUploadNotice,
+}) {
   const availableDates = useMemo(
     () =>
       Object.keys(currentUser?.records || {})
@@ -489,69 +964,28 @@ export default function App() {
   );
 
   const [selectedDate, setSelectedDate] = useState(
-    () => availableDates[0] || "2026-11-22",
+    () => availableDates[0] || new Date().toISOString().split("T")[0],
   );
-  const [activeTab, setActiveTab] = useState("full_share"); // 'full_share' | 'daily_trading' | 'analytics'
-  const [analyticsPeriod, setAnalyticsPeriod] = useState("1M"); // '1M' | '1Y' | 'CUSTOM'
+  const [activeTab, setActiveTab] = useState("full_share");
+  const [analyticsPeriod, setAnalyticsPeriod] = useState("1M");
   const [customStartDate, setCustomStartDate] = useState("2026-01-01");
   const [customEndDate, setCustomEndDate] = useState("2026-12-31");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedShare, setSelectedShare] = useState(null);
-  const [showNewUserModal, setShowNewUserModal] = useState(false);
-  const [showPdfDrawer, setShowPdfDrawer] = useState(true); // Left-side PDF viewer toggle
-  const [activePdfType, setActivePdfType] = useState("portfolio"); // 'portfolio' | 'trade'
-  const [syncStatus, setSyncStatus] = useState(
-    isFirebaseConfigured ? "Firebase Connected" : "Local Storage Mode",
-  );
-  const [uploadNotice, setUploadNotice] = useState("");
 
-  // New User Form
-  const [newName, setNewName] = useState("");
-  const [newCode, setNewCode] = useState("");
-  const [newBoId, setNewBoId] = useState("");
-  const [newBroker, setNewBroker] = useState(BROKERAGES[0]);
+  // Left-side PDF drawer starts CLOSED by default
+  const [showPdfDrawer, setShowPdfDrawer] = useState(false);
+  const [activePdfType, setActivePdfType] = useState("portfolio");
+
+  const [depositInput, setDepositInput] = useState("");
+  const [showDepositEditor, setShowDepositEditor] = useState(false);
+  const [showAllDatabaseShares, setShowAllDatabaseShares] = useState(true);
 
   useEffect(() => {
-    if (!availableDates.includes(selectedDate) && availableDates.length > 0) {
+    if (availableDates.length > 0 && !availableDates.includes(selectedDate)) {
       setSelectedDate(availableDates[0]);
     }
-  }, [currentUserId, availableDates, selectedDate]);
-
-  useEffect(() => {
-    localStorage.setItem("dse_multi_users_v3", JSON.stringify(users));
-    localStorage.setItem("dse_active_user_id_v3", currentUserId);
-  }, [users, currentUserId]);
-
-  const syncToFirebase = async (updatedUser) => {
-    if (!isFirebaseConfigured || !db) return;
-    try {
-      setSyncStatus("Syncing to Firebase...");
-      await setDoc(doc(db, "portfolios", updatedUser.id), updatedUser);
-      setSyncStatus("Synced with Firebase");
-    } catch (err) {
-      console.error("Firebase sync error:", err);
-      setSyncStatus("Firebase Sync Error");
-    }
-  };
-
-  useEffect(() => {
-    async function loadFromCloud() {
-      if (!isFirebaseConfigured || !db || !currentUserId) return;
-      try {
-        const snap = await getDoc(doc(db, "portfolios", currentUserId));
-        if (snap.exists()) {
-          const cloudData = snap.data();
-          setUsers((prev) =>
-            prev.map((u) => (u.id === currentUserId ? cloudData : u)),
-          );
-          setSyncStatus("Synced with Firebase");
-        }
-      } catch (e) {
-        console.warn("Cloud fetch skipped:", e);
-      }
-    }
-    loadFromCloud();
-  }, [currentUserId]);
+  }, [currentUser.id, availableDates, selectedDate]);
 
   const currentRecord = currentUser?.records?.[selectedDate] || {
     date: selectedDate,
@@ -568,7 +1002,93 @@ export default function App() {
     news: [],
   };
 
-  // Upload PDF -> Save to Firebase Storage (if configured) + Local Blob URL + Extract Data
+  const allDatabaseHoldings = useMemo(() => {
+    const recs = Object.values(currentUser?.records || {});
+    const sourceRecs = showAllDatabaseShares ? recs : [currentRecord];
+
+    const mapByCompany = new Map();
+    for (const rec of sourceRecs) {
+      const combined = [
+        ...(rec.marginable || []),
+        ...(rec.nonMarginable || []),
+      ];
+      for (const item of combined) {
+        const key = item.company;
+        const qty = Number(item.totalQty || 0);
+        const buy = Number(item.buyPrice || 0);
+        const sell = Number(item.sellPrice || 0);
+        if (!mapByCompany.has(key)) {
+          mapByCompany.set(key, {
+            ...item,
+            totalQty: qty,
+            salableQty: Number(item.salableQty ?? qty),
+            buyPrice: buy,
+            sellPrice: sell,
+            _costSum: buy * qty,
+          });
+        } else if (showAllDatabaseShares) {
+          const existing = mapByCompany.get(key);
+          const newQty = existing.totalQty + qty;
+          const newCostSum = existing._costSum + buy * qty;
+          mapByCompany.set(key, {
+            ...existing,
+            totalQty: newQty,
+            salableQty: existing.salableQty + Number(item.salableQty ?? qty),
+            buyPrice: newQty > 0 ? +(newCostSum / newQty).toFixed(2) : buy,
+            sellPrice: sell || existing.sellPrice,
+            _costSum: newCostSum,
+            history: [
+              ...(existing.history || []),
+              ...(item.history || [sell]),
+            ].slice(-8),
+          });
+        }
+      }
+    }
+    return Array.from(mapByCompany.values());
+  }, [currentUser, currentRecord, showAllDatabaseShares]);
+
+  const handleUpdateDeposit = (e) => {
+    e.preventDefault();
+    const val = parseFloat(depositInput);
+    if (isNaN(val) || val < 0) return;
+
+    setAccounts((prev) =>
+      prev.map((acc) => {
+        if (acc.id !== currentUser.id) return acc;
+        const existingRec = acc.records[selectedDate] || {
+          date: selectedDate,
+          deposit: 0,
+          availableBalance: 0,
+          portfolioPdfName: "",
+          portfolioPdfUrl: "",
+          tradePdfName: "",
+          tradePdfUrl: "",
+          marginable: [],
+          nonMarginable: [],
+          trades: [],
+          sectors: [],
+          news: [],
+        };
+        const updatedAcc = {
+          ...acc,
+          records: {
+            ...acc.records,
+            [selectedDate]: {
+              ...existingRec,
+              deposit: val,
+              availableBalance: val,
+            },
+          },
+        };
+        saveAccountToFirebase(updatedAcc);
+        return updatedAcc;
+      }),
+    );
+    setShowDepositEditor(false);
+    setDepositInput("");
+  };
+
   const handlePdfUpload = async (e, uploadCategory = "auto") => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -585,7 +1105,7 @@ export default function App() {
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const content = await page.getTextContent();
-          fullText += content.items.map((item) => item.str).join(" ") + "";
+          fullText += content.items.map((item) => item.str).join(" ") + "\n";
         }
 
         const isTradeNote =
@@ -604,27 +1124,22 @@ export default function App() {
           }
         }
 
-        // Upload original PDF to Firebase Storage if connected
         let finalPdfUrl = localBlobUrl;
         if (isFirebaseConfigured && storage) {
           try {
             setSyncStatus("Uploading PDF to Firebase Storage...");
             const storageRef = ref(
               storage,
-              `pdfs/${currentUserId}/${targetDate}/${file.name}`,
+              `pdfs/${currentUser.id}/${targetDate}/${file.name}`,
             );
             await uploadBytes(storageRef, file);
             finalPdfUrl = await getDownloadURL(storageRef);
             setSyncStatus("PDF Saved to Firebase Storage");
           } catch (storageErr) {
-            console.warn(
-              "Firebase Storage upload skipped, using local viewer:",
-              storageErr,
-            );
+            console.warn("Storage upload fallback:", storageErr);
           }
         }
 
-        // Extract Portfolio Holdings (Full Share Information)
         const rowRegex =
           /([A-Z]{2,12}\*?)\s+([ABZNG])\s+(\d+)\s+(\d+)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/g;
         const extractedShares = [];
@@ -653,7 +1168,6 @@ export default function App() {
           });
         }
 
-        // Extract Daily Trade Confirmation Orders (BUY & SELL)
         const tradeRegex =
           /Public\s+(BUY|SELL)\s+(?:DSE|CSE)\s+([ABZNG])\s+([A-Z]{2,12})\s+(\d+)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/g;
         const extractedTrades = [];
@@ -677,13 +1191,13 @@ export default function App() {
           });
         }
 
-        setUsers((prev) =>
-          prev.map((user) => {
-            if (user.id !== currentUserId) return user;
-            const existingRec = user.records[targetDate] || {
+        setAccounts((prev) =>
+          prev.map((acc) => {
+            if (acc.id !== currentUser.id) return acc;
+            const existingRec = acc.records[targetDate] || {
               date: targetDate,
-              deposit: 0,
-              availableBalance: 0,
+              deposit: currentRecord.deposit || 0,
+              availableBalance: currentRecord.availableBalance || 0,
               portfolioPdfName: "",
               portfolioPdfUrl: "",
               tradePdfName: "",
@@ -715,26 +1229,25 @@ export default function App() {
                   : existingRec.trades,
             };
 
-            const updatedUser = {
-              ...user,
+            const updatedAcc = {
+              ...acc,
               records: {
-                ...user.records,
+                ...acc.records,
                 [targetDate]: updatedRec,
               },
             };
-            syncToFirebase(updatedUser);
-            return updatedUser;
+            saveAccountToFirebase(updatedAcc);
+            return updatedAcc;
           }),
         );
 
         setSelectedDate(targetDate);
         setActivePdfType(isTradeNote ? "trade" : "portfolio");
         setActiveTab(isTradeNote ? "daily_trading" : "full_share");
-        setShowPdfDrawer(true);
         setUploadNotice(
-          `Uploaded "${file.name}" (${isTradeNote ? "Daily Trading PDF" : "Full Portfolio PDF"}) for ${targetDate}`,
+          `Uploaded "${file.name}" for ${targetDate} & synced to database.`,
         );
-        setTimeout(() => setUploadNotice(""), 4500);
+        setTimeout(() => setUploadNotice(""), 4000);
       } catch (err) {
         console.error(err);
         setUploadNotice(`Processed "${file.name}"`);
@@ -743,44 +1256,6 @@ export default function App() {
     e.target.value = "";
   };
 
-  const handleCreateUser = (e) => {
-    e.preventDefault();
-    if (!newName.trim() || !newCode.trim()) return;
-    const id = "user_" + Date.now();
-    const today = new Date().toISOString().split("T")[0];
-    const created = {
-      id,
-      name: newName.trim(),
-      investorCode: newCode.trim().toUpperCase(),
-      boId: newBoId.trim() || "1200000000000000",
-      brokerage: newBroker,
-      records: {
-        [today]: {
-          date: today,
-          deposit: 0,
-          availableBalance: 0,
-          portfolioPdfName: "",
-          portfolioPdfUrl: "",
-          tradePdfName: "",
-          tradePdfUrl: "",
-          marginable: [],
-          nonMarginable: [],
-          trades: [],
-          sectors: [],
-          news: [],
-        },
-      },
-    };
-    setUsers((prev) => [...prev, created]);
-    setCurrentUserId(id);
-    syncToFirebase(created);
-    setNewName("");
-    setNewCode("");
-    setNewBoId("");
-    setShowNewUserModal(false);
-  };
-
-  // Monthly / Yearly / Custom Range Aggregated Buying & Selling Analytics
   const periodAnalytics = useMemo(() => {
     const allRecs = Object.values(currentUser?.records || {});
     const refDate = new Date(selectedDate || "2026-11-22");
@@ -828,7 +1303,6 @@ export default function App() {
     const totalComm = allTrades.reduce((s, t) => s + Number(t.comm || 0), 0);
 
     return {
-      filteredRecs,
       allTrades,
       buyTrades,
       sellTrades,
@@ -852,24 +1326,25 @@ export default function App() {
     return list.filter((item) => item.company.toLowerCase().includes(q));
   };
 
-  const marginableRows = filterList(currentRecord.marginable || []);
-  const nonMarginableRows = filterList(currentRecord.nonMarginable || []);
+  const filteredHoldings = filterList(allDatabaseHoldings);
   const tradeRows = filterList(currentRecord.trades || []);
 
-  const allHoldings = [
-    ...(currentRecord.marginable || []),
-    ...(currentRecord.nonMarginable || []),
-  ];
-  const totalBuyCost = allHoldings.reduce(
+  const totalBuyCost = allDatabaseHoldings.reduce(
     (acc, s) => acc + s.buyPrice * s.totalQty,
     0,
   );
-  const totalSellVal = allHoldings.reduce(
+  const totalSellVal = allDatabaseHoldings.reduce(
     (acc, s) => acc + s.sellPrice * s.totalQty,
     0,
   );
   const netPL = totalSellVal - totalBuyCost;
   const netPLPct = totalBuyCost > 0 ? (netPL / totalBuyCost) * 100 : 0;
+
+  const totalDeposit = useMemo(() => {
+    const recs = Object.values(currentUser?.records || {});
+    const sum = recs.reduce((s, r) => s + Number(r.deposit || 0), 0);
+    return sum > 0 ? sum : Number(currentRecord.deposit || 0);
+  }, [currentUser, currentRecord]);
 
   const activePdfUrl =
     activePdfType === "portfolio"
@@ -880,7 +1355,6 @@ export default function App() {
       ? currentRecord.portfolioPdfName
       : currentRecord.tradePdfName;
 
-  // Holdings Table Renderer
   const renderHoldingsTable = (rows) => (
     <table className="w-full text-xs sm:text-sm text-left border-collapse min-w-[880px]">
       <thead>
@@ -910,8 +1384,8 @@ export default function App() {
         {rows.length === 0 ? (
           <tr>
             <td colSpan={11} className="py-6 text-center text-slate-400">
-              No shares recorded for {selectedDate}. Upload your Portfolio
-              Statement PDF.
+              No share records found in database yet. Upload your Full Share PDF
+              above.
             </td>
           </tr>
         ) : (
@@ -926,12 +1400,9 @@ export default function App() {
             return (
               <tr
                 key={idx}
-                onClick={() => {
-                  setSelectedShare(row);
-                  setShowPdfDrawer(true);
-                }}
+                onClick={() => setSelectedShare(row)}
                 className="hover:bg-amber-50/60 cursor-pointer transition-colors group"
-                title="Click to inspect trend graph & view PDF on left"
+                title="Click to inspect price increase/decrease graph"
               >
                 <td className="py-2.5 px-3 font-bold text-slate-900 group-hover:text-blue-700 flex items-center gap-1.5">
                   <span>{row.company}</span>
@@ -985,11 +1456,10 @@ export default function App() {
                       e.stopPropagation();
                       setSelectedShare(row);
                     }}
-                    className={`px-2 py-1 rounded-lg text-xs font-semibold border ${
-                      isGain
+                    className={`px-2 py-1 rounded-lg text-xs font-semibold border ${isGain
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                         : "bg-rose-50 text-rose-700 border-rose-200"
-                    }`}
+                      }`}
                   >
                     {isGain ? "▲ Graph" : "▼ Graph"}
                   </button>
@@ -1002,7 +1472,6 @@ export default function App() {
     </table>
   );
 
-  // Trade Table Renderer
   const renderTradesTable = (rows) => (
     <table className="w-full text-xs sm:text-sm text-left border-collapse min-w-[780px]">
       <thead>
@@ -1031,8 +1500,7 @@ export default function App() {
         {rows.length === 0 ? (
           <tr>
             <td colSpan={10} className="py-6 text-center text-slate-400">
-              No trading orders found in this selection. Upload your Daily Trade
-              Confirmation PDF.
+              No trading orders recorded for this date.
             </td>
           </tr>
         ) : (
@@ -1046,11 +1514,7 @@ export default function App() {
             return (
               <tr
                 key={idx}
-                onClick={() => {
-                  setSelectedShare({ ...t, totalQty: t.qty });
-                  setActivePdfType("trade");
-                  setShowPdfDrawer(true);
-                }}
+                onClick={() => setSelectedShare({ ...t, totalQty: t.qty })}
                 className="hover:bg-amber-50/60 cursor-pointer"
               >
                 <td className="py-2.5 px-3 text-slate-500 text-xs">
@@ -1105,7 +1569,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-12">
-      {/* Top Header */}
       <header className="bg-slate-900 text-white sticky top-0 z-30 shadow-md">
         <div className="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -1114,11 +1577,14 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-bold text-base sm:text-lg leading-tight">
-                DSE Smart Portfolio & Trade Analyzer
+                {currentUser.name}{" "}
+                <span className="text-emerald-400 text-xs font-semibold">
+                  ({currentUser.investorCode})
+                </span>
               </h1>
               <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                <Building2 className="w-3 h-3" /> {currentUser?.brokerage} •
-                Split PDF Viewer & Analytics
+                <Building2 className="w-3 h-3" /> {currentUser.brokerage} • BO:{" "}
+                {currentUser.boId}
               </p>
             </div>
           </div>
@@ -1126,22 +1592,20 @@ export default function App() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setShowPdfDrawer(!showPdfDrawer)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
-                showPdfDrawer
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${showPdfDrawer
                   ? "bg-blue-600 text-white border-blue-500"
-                  : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
-              }`}
+                  : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700"
+                }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>{showPdfDrawer ? "Hide Left PDF" : "Show Left PDF"}</span>
+              <span>{showPdfDrawer ? "Close Left PDF" : "Open Left PDF"}</span>
             </button>
 
             <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
-                isFirebaseConfigured
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${isFirebaseConfigured
                   ? "bg-emerald-950/80 text-emerald-300 border-emerald-700"
                   : "bg-slate-800 text-amber-300 border-slate-700"
-              }`}
+                }`}
             >
               {isFirebaseConfigured ? (
                 <Cloud className="w-3.5 h-3.5" />
@@ -1151,24 +1615,12 @@ export default function App() {
               <span>{syncStatus}</span>
             </div>
 
-            <select
-              value={currentUserId}
-              onChange={(e) => setCurrentUserId(e.target.value)}
-              className="bg-slate-800 text-white text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none"
-            >
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.investorCode})
-                </option>
-              ))}
-            </select>
-
             <button
-              onClick={() => setShowNewUserModal(true)}
-              className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-lg transition"
+              onClick={onLogout}
+              className="flex items-center gap-1 bg-rose-600/90 hover:bg-rose-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition"
             >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Account</span>
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout</span>
             </button>
           </div>
         </div>
@@ -1186,7 +1638,108 @@ export default function App() {
           </div>
         )}
 
-        {/* Top Controls: Date Picker, Dual PDF Uploaders, Search */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div className="text-xs text-slate-500 font-medium flex items-center gap-1">
+              <UserCheck className="w-3.5 h-3.5 text-blue-600" /> Active
+              Investor Account
+            </div>
+            <div className="font-bold text-slate-900 text-base mt-1">
+              {currentUser.name}
+            </div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              {currentUser.email} • Code: <b>{currentUser.investorCode}</b>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                <Wallet className="w-3.5 h-3.5 text-emerald-600" /> Total
+                Deposit Amount
+              </span>
+              <button
+                onClick={() => {
+                  setDepositInput(String(totalDeposit));
+                  setShowDepositEditor(!showDepositEditor);
+                }}
+                className="text-[11px] font-bold text-blue-600 hover:underline"
+              >
+                Edit Deposit
+              </button>
+            </div>
+            <div className="font-bold text-emerald-700 text-xl mt-1">
+              ৳
+              {totalDeposit.toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+              })}
+            </div>
+            {showDepositEditor && (
+              <form
+                onSubmit={handleUpdateDeposit}
+                className="mt-2 flex items-center gap-1.5"
+              >
+                <input
+                  type="number"
+                  step="0.01"
+                  value={depositInput}
+                  onChange={(e) => setDepositInput(e.target.value)}
+                  className="border border-slate-300 rounded px-2 py-1 text-xs w-28 font-semibold"
+                />
+                <button
+                  type="submit"
+                  className="bg-emerald-600 text-white text-xs px-2.5 py-1 rounded font-bold"
+                >
+                  Save
+                </button>
+              </form>
+            )}
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div className="text-xs text-slate-500 font-medium">
+              Total Share Buying Cost
+            </div>
+            <div className="font-bold text-blue-900 text-xl mt-1">
+              ৳
+              {totalBuyCost.toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+              })}
+            </div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              Market Value: ৳
+              {totalSellVal.toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+              })}
+            </div>
+          </div>
+
+          <div
+            className={`p-4 rounded-xl border shadow-sm ${netPL >= 0 ? "bg-emerald-50/80 border-emerald-200" : "bg-rose-50/80 border-rose-200"}`}
+          >
+            <div className="text-xs text-slate-600 font-medium">
+              Net Gain / Loss
+            </div>
+            <div
+              className={`font-bold text-xl mt-1 flex items-center gap-1.5 ${netPL >= 0 ? "text-emerald-700" : "text-rose-700"}`}
+            >
+              {netPL >= 0 ? (
+                <TrendingUp className="w-5 h-5" />
+              ) : (
+                <TrendingDown className="w-5 h-5" />
+              )}
+              <span>
+                {netPL >= 0 ? "+" : ""}৳{netPL.toFixed(2)} (
+                {netPL >= 0 ? "+" : ""}
+                {netPLPct.toFixed(2)}%)
+              </span>
+            </div>
+            <div className="text-xs text-slate-600 mt-0.5">
+              Click any share row for trend graph
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -1207,7 +1760,7 @@ export default function App() {
               >
                 {availableDates.map((d) => (
                   <option key={d} value={d}>
-                    Saved Date: {d}
+                    Date: {d}
                   </option>
                 ))}
               </select>
@@ -1225,7 +1778,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Two Dedicated Upload Buttons: Full Portfolio PDF & Daily Trading PDF */}
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm px-3.5 py-2.5 rounded-lg cursor-pointer transition shadow-sm">
               <Upload className="w-4 h-4" />
@@ -1251,21 +1803,19 @@ export default function App() {
           </div>
         </div>
 
-        {/* Main 3-Tab Switcher: Full Share Info | Per-Day Trading | Monthly/Yearly/Custom Buying & Selling */}
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
           <button
             onClick={() => {
               setActiveTab("full_share");
               setActivePdfType("portfolio");
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition ${
-              activeTab === "full_share"
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition ${activeTab === "full_share"
                 ? "bg-slate-900 text-white shadow"
                 : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
-            }`}
+              }`}
           >
             <Layers className="w-4 h-4 text-emerald-400" />
-            <span>Full Share Information (Portfolio Statement)</span>
+            <span>Full Share Information (All Database Shares)</span>
           </button>
 
           <button
@@ -1273,11 +1823,10 @@ export default function App() {
               setActiveTab("daily_trading");
               setActivePdfType("trade");
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition ${
-              activeTab === "daily_trading"
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition ${activeTab === "daily_trading"
                 ? "bg-slate-900 text-white shadow"
                 : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
-            }`}
+              }`}
           >
             <Repeat className="w-4 h-4 text-blue-400" />
             <span>Per-Day Trading (Trade Confirmation)</span>
@@ -1285,32 +1834,24 @@ export default function App() {
 
           <button
             onClick={() => setActiveTab("analytics")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition ${
-              activeTab === "analytics"
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition ${activeTab === "analytics"
                 ? "bg-slate-900 text-white shadow"
                 : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
-            }`}
+              }`}
           >
             <Filter className="w-4 h-4 text-amber-400" />
-            <span>
-              Buying & Selling Summary (1 Month / 1 Year / Custom Range)
-            </span>
+            <span>Buying & Selling Summary (1M / 1Y / Custom)</span>
           </button>
         </div>
 
-        {/* Split Layout: Left Side PDF Viewer + Right Side Data Tables */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          {/* LEFT SIDE: Embedded PDF Document Viewer */}
           {showPdfDrawer && (
             <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden sticky top-20">
               <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 truncate">
                   <FileText className="w-4 h-4 text-amber-400 shrink-0" />
                   <span className="text-xs sm:text-sm font-bold truncate">
-                    {activePdfName ||
-                      (activePdfType === "portfolio"
-                        ? "Full Share PDF Preview"
-                        : "Daily Trading PDF Preview")}
+                    {activePdfName || "PDF Document Preview"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -1318,199 +1859,102 @@ export default function App() {
                     onClick={() => setActivePdfType("portfolio")}
                     className={`px-2 py-1 rounded text-[11px] font-semibold ${activePdfType === "portfolio" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300"}`}
                   >
-                    Portfolio PDF
+                    Portfolio
                   </button>
                   <button
                     onClick={() => setActivePdfType("trade")}
                     className={`px-2 py-1 rounded text-[11px] font-semibold ${activePdfType === "trade" ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-300"}`}
                   >
-                    Trade PDF
+                    Trade
+                  </button>
+                  <button
+                    onClick={() => setShowPdfDrawer(false)}
+                    className="p-1 text-slate-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
               {activePdfUrl ? (
-                <div className="h-[580px] w-full bg-slate-100 flex flex-col">
+                <div className="h-[560px] w-full bg-slate-100 flex flex-col">
                   <iframe
                     src={activePdfUrl}
-                    title="Uploaded Brokerage PDF"
+                    title="Brokerage PDF"
                     className="w-full h-full border-0"
                   />
                   <div className="p-2 bg-slate-50 border-t flex justify-between items-center text-xs">
-                    <span className="text-slate-500">
-                      Stored in Firebase / Local Session
-                    </span>
+                    <span className="text-slate-500">Date: {selectedDate}</span>
                     <a
                       href={activePdfUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="text-blue-600 font-semibold flex items-center gap-1 hover:underline"
                     >
-                      Open Fullscreen <ExternalLink className="w-3 h-3" />
+                      Fullscreen <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                 </div>
               ) : (
-                <div className="p-8 text-center space-y-3 bg-slate-50/70">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mx-auto">
-                    <FileText className="w-6 h-6" />
-                  </div>
-                  <h4 className="font-bold text-slate-800 text-sm">
+                <div className="p-8 text-center space-y-2 bg-slate-50/70">
+                  <FileText className="w-8 h-8 text-blue-500 mx-auto" />
+                  <p className="text-xs text-slate-600 font-semibold">
                     {activePdfName
-                      ? `Saved File: ${activePdfName}`
-                      : "No PDF Uploaded for This Date Yet"}
-                  </h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Upload your <b>Full Share Portfolio PDF</b> or{" "}
-                    <b>Daily Trading PDF</b> using the buttons above. Once
-                    uploaded, the PDF automatically renders right here on the
-                    left side alongside your extracted tables.
+                      ? `Document: ${activePdfName}`
+                      : `No PDF attached for ${selectedDate}`}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Upload a PDF above to preview it here anytime.
                   </p>
                 </div>
               )}
             </div>
           )}
 
-          {/* RIGHT SIDE: Active Tab Data Workspace */}
           <div
             className={`${showPdfDrawer ? "lg:col-span-8" : "lg:col-span-12"} space-y-5`}
           >
-            {/* TAB 1: FULL SHARE INFORMATION (PORTFOLIO STATEMENT) */}
             {activeTab === "full_share" && (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="text-xs text-slate-500">
-                      Total Buying Cost
-                    </div>
-                    <div className="font-bold text-blue-900 text-lg mt-0.5">
-                      ৳{totalBuyCost.toFixed(2)}
-                    </div>
-                  </div>
-                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="text-xs text-slate-500">
-                      Current Market / Selling Value
-                    </div>
-                    <div className="font-bold text-indigo-900 text-lg mt-0.5">
-                      ৳{totalSellVal.toFixed(2)}
-                    </div>
-                  </div>
-                  <div
-                    className={`p-4 rounded-xl border shadow-sm ${netPL >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}`}
+                <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-4 py-2.5 rounded-xl border border-slate-200">
+                  <span className="text-xs font-semibold text-slate-600">
+                    Data Scope: Showing{" "}
+                    {showAllDatabaseShares
+                      ? "ALL shares stored in your database across all uploaded PDFs"
+                      : `shares for ${selectedDate}`}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setShowAllDatabaseShares(!showAllDatabaseShares)
+                    }
+                    className="text-xs font-bold px-3 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
                   >
-                    <div className="text-xs text-slate-600">
-                      Net Portfolio Gain / Loss
-                    </div>
-                    <div
-                      className={`font-bold text-lg mt-0.5 ${netPL >= 0 ? "text-emerald-700" : "text-rose-700"}`}
-                    >
-                      {netPL >= 0 ? "+" : ""}৳{netPL.toFixed(2)} (
-                      {netPL >= 0 ? "+" : ""}
-                      {netPLPct.toFixed(2)}%)
-                    </div>
-                  </div>
+                    {showAllDatabaseShares
+                      ? "Switch to Selected Date Only"
+                      : "Show Full Database Shares"}
+                  </button>
                 </div>
 
                 <FolderSection
-                  title="Marginable Securities (Full Share Holdings)"
-                  badge={`${marginableRows.length} Shares`}
+                  title="Full Share Information (All Database Holdings)"
+                  badge={`${filteredHoldings.length} Companies`}
                   defaultOpen={true}
                 >
-                  {renderHoldingsTable(marginableRows)}
-                </FolderSection>
-
-                <FolderSection
-                  title="Non-Marginable Securities (Full Share Holdings)"
-                  badge={`${nonMarginableRows.length} Shares`}
-                  defaultOpen={true}
-                >
-                  {renderHoldingsTable(nonMarginableRows)}
-                </FolderSection>
-
-                <FolderSection
-                  title="Sector Wise Investment Breakdown"
-                  badge={`${(currentRecord.sectors || []).length} Sectors`}
-                  defaultOpen={false}
-                >
-                  <table className="w-full text-xs sm:text-sm text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-700 border-b font-semibold">
-                        <th className="py-2.5 px-4">Sector Name</th>
-                        <th className="py-2.5 px-4 text-right">
-                          Investment Amount (Tk.)
-                        </th>
-                        <th className="py-2.5 px-4 text-right">
-                          Allocation (%)
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {(currentRecord.sectors || []).map((sec, i) => (
-                        <tr key={i}>
-                          <td className="py-2.5 px-4 font-semibold">
-                            {sec.sector}
-                          </td>
-                          <td className="py-2.5 px-4 text-right">
-                            ৳{Number(sec.amount).toFixed(2)}
-                          </td>
-                          <td className="py-2.5 px-4 text-right font-bold text-blue-700">
-                            {Number(sec.pct).toFixed(2)}%
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {renderHoldingsTable(filteredHoldings)}
                 </FolderSection>
               </>
             )}
 
-            {/* TAB 2: PER-DAY TRADING (TRADE CONFIRMATION NOTE) */}
             {activeTab === "daily_trading" && (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="bg-blue-50/70 p-4 rounded-xl border border-blue-200">
-                    <div className="text-xs font-semibold text-blue-800">
-                      Today's Total Buy Orders ({selectedDate})
-                    </div>
-                    <div className="text-lg font-bold text-blue-950 mt-1">
-                      {tradeRows
-                        .filter((t) => t.type === "BUY")
-                        .reduce((s, t) => s + t.qty, 0)}{" "}
-                      Shares • ৳
-                      {tradeRows
-                        .filter((t) => t.type === "BUY")
-                        .reduce((s, t) => s + t.qty * t.buyPrice, 0)
-                        .toFixed(2)}
-                    </div>
-                  </div>
-                  <div className="bg-purple-50/70 p-4 rounded-xl border border-purple-200">
-                    <div className="text-xs font-semibold text-purple-800">
-                      Today's Total Sell Orders ({selectedDate})
-                    </div>
-                    <div className="text-lg font-bold text-purple-950 mt-1">
-                      {tradeRows
-                        .filter((t) => t.type === "SELL")
-                        .reduce((s, t) => s + t.qty, 0)}{" "}
-                      Shares • ৳
-                      {tradeRows
-                        .filter((t) => t.type === "SELL")
-                        .reduce((s, t) => s + t.qty * t.sellPrice, 0)
-                        .toFixed(2)}
-                    </div>
-                  </div>
-                </div>
-
-                <FolderSection
-                  title={`Per-Day Trade Confirmation Orders (${selectedDate})`}
-                  badge={`${tradeRows.length} Orders`}
-                  defaultOpen={true}
-                >
-                  {renderTradesTable(tradeRows)}
-                </FolderSection>
-              </>
+              <FolderSection
+                title={`Per-Day Trading Orders (${selectedDate})`}
+                badge={`${tradeRows.length} Trades`}
+                defaultOpen={true}
+              >
+                {renderTradesTable(tradeRows)}
+              </FolderSection>
             )}
 
-            {/* TAB 3: BUYING & SELLING ANALYTICS (1 MONTH / 1 YEAR / CUSTOM DATE RANGE) */}
             {activeTab === "analytics" && (
               <div className="space-y-4">
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
@@ -1520,38 +1964,35 @@ export default function App() {
                         Buying & Selling Volume Filter
                       </h3>
                       <p className="text-xs text-slate-500">
-                        Automatically calculates total shares bought & sold
-                        across 1 Month, 1 Year, or Custom Date Range
+                        View total shares bought & sold in 1 Month, 1 Year, or
+                        Custom Range
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         onClick={() => setAnalyticsPeriod("1M")}
-                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold border ${
-                          analyticsPeriod === "1M"
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold border ${analyticsPeriod === "1M"
                             ? "bg-blue-600 text-white border-blue-600"
                             : "bg-slate-50 text-slate-700 border-slate-200"
-                        }`}
+                          }`}
                       >
                         Last 1 Month
                       </button>
                       <button
                         onClick={() => setAnalyticsPeriod("1Y")}
-                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold border ${
-                          analyticsPeriod === "1Y"
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold border ${analyticsPeriod === "1Y"
                             ? "bg-blue-600 text-white border-blue-600"
                             : "bg-slate-50 text-slate-700 border-slate-200"
-                        }`}
+                          }`}
                       >
                         Last 1 Year
                       </button>
                       <button
                         onClick={() => setAnalyticsPeriod("CUSTOM")}
-                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold border ${
-                          analyticsPeriod === "CUSTOM"
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold border ${analyticsPeriod === "CUSTOM"
                             ? "bg-blue-600 text-white border-blue-600"
                             : "bg-slate-50 text-slate-700 border-slate-200"
-                        }`}
+                          }`}
                       >
                         Custom Date Range
                       </button>
@@ -1586,7 +2027,6 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Period Summary Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
                     <div className="text-xs font-semibold text-blue-800">
@@ -1596,8 +2036,7 @@ export default function App() {
                       {periodAnalytics.totalBoughtQty} Shares
                     </div>
                     <div className="text-xs text-blue-700 mt-0.5">
-                      Total Buy Value: ৳
-                      {periodAnalytics.totalBoughtAmount.toFixed(2)}
+                      Buy Value: ৳{periodAnalytics.totalBoughtAmount.toFixed(2)}
                     </div>
                   </div>
 
@@ -1609,26 +2048,25 @@ export default function App() {
                       {periodAnalytics.totalSoldQty} Shares
                     </div>
                     <div className="text-xs text-emerald-700 mt-0.5">
-                      Total Sell Value: ৳
-                      {periodAnalytics.totalSoldAmount.toFixed(2)}
+                      Sell Value: ৳{periodAnalytics.totalSoldAmount.toFixed(2)}
                     </div>
                   </div>
 
                   <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
                     <div className="text-xs font-semibold text-amber-800">
-                      Total Brokerage Commission
+                      Total Commission
                     </div>
                     <div className="text-xl font-bold text-amber-950 mt-1">
                       ৳{periodAnalytics.totalComm.toFixed(2)}
                     </div>
                     <div className="text-xs text-amber-700 mt-0.5">
-                      Across {periodAnalytics.allTrades.length} Executed Orders
+                      {periodAnalytics.allTrades.length} Orders
                     </div>
                   </div>
                 </div>
 
                 <FolderSection
-                  title={`Buying History Table (${periodAnalytics.buyTrades.length} Buy Orders)`}
+                  title={`Buying History (${periodAnalytics.buyTrades.length} Orders)`}
                   badge={`${periodAnalytics.totalBoughtQty} Shares`}
                   defaultOpen={true}
                 >
@@ -1636,7 +2074,7 @@ export default function App() {
                 </FolderSection>
 
                 <FolderSection
-                  title={`Selling History Table (${periodAnalytics.sellTrades.length} Sell Orders)`}
+                  title={`Selling History (${periodAnalytics.sellTrades.length} Orders)`}
                   badge={`${periodAnalytics.totalSoldQty} Shares`}
                   defaultOpen={true}
                 >
@@ -1648,103 +2086,10 @@ export default function App() {
         </div>
       </main>
 
-      {/* Share Price Graph Modal */}
       <ShareTrendModal
         share={selectedShare}
         onClose={() => setSelectedShare(null)}
       />
-
-      {/* New Investor Account Modal */}
-      {showNewUserModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-bold text-lg text-slate-900">
-                Create Investor Account
-              </h3>
-              <button
-                onClick={() => setShowNewUserModal(false)}
-                className="text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateUser} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Investor Full Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter your name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Investor Code *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. BR8576"
-                    value={newCode}
-                    onChange={(e) => setNewCode(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    BO ID (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="16-digit BO ID"
-                    value={newBoId}
-                    onChange={(e) => setNewBoId(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Brokerage House
-                </label>
-                <select
-                  value={newBroker}
-                  onChange={(e) => setNewBroker(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                >
-                  {BROKERAGES.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowNewUserModal(false)}
-                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
-                >
-                  Create & Open Workspace
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

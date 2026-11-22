@@ -1,8 +1,8 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { getAuth } from 'firebase/auth';
 
-// Replace these values with your own Firebase Project Config from Firebase Console
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
@@ -16,12 +16,14 @@ export const isFirebaseConfigured = Boolean(firebaseConfig.apiKey && firebaseCon
 
 let app = null;
 let db = null;
+let storage = null;
 let auth = null;
 
 if (isFirebaseConfigured) {
   app = initializeApp(firebaseConfig);
   db = getFirestore(app);
+  storage = getStorage(app);
   auth = getAuth(app);
 }
 
-export { db, auth };
+export { db, storage, auth };

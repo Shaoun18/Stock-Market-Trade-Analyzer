@@ -26,22 +26,20 @@ import {
 import { DEMO_ACCOUNT, INITIAL_DEMO_TRADES } from './demoData';
 import { parseAndValidateTradePdf } from './pdfParser';
 import { isFirebaseConfigured } from './firebase';
+import ShareDetailGraph from './ShareDetailGraph';
 
-const STORAGE_USERS_KEY = 'dse_tracker_users_v4';
-const STORAGE_SESSION_KEY = 'dse_tracker_active_session_v4';
-const STORAGE_TRADES_PREFIX = 'dse_tracker_trades_v4_';
+const STORAGE_USERS_KEY = 'dse_tracker_users_v5';
+const STORAGE_SESSION_KEY = 'dse_tracker_active_session_v5';
+const STORAGE_TRADES_PREFIX = 'dse_tracker_trades_v5_';
 
 export default function App() {
-  // Authentication & View State (Always defaults to 'signin' on logout or fresh load)
-  const [authMode, setAuthMode] = useState('signin'); // 'signin' | 'signup'
+  const [authMode, setAuthMode] = useState('signin');
   const [currentUser, setCurrentUser] = useState(null);
 
-  // Sign In Form State (Strictly blank by default)
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // Sign Up Form State (Strictly blank by default, demo placeholders only)
   const [signupName, setSignupName] = useState('');
   const [signupClientCode, setSignupClientCode] = useState('');
   const [signupBoId, setSignupBoId] = useState('');
@@ -49,36 +47,30 @@ export default function App() {
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
 
-  // Dashboard & Portfolio State
   const [trades, setTrades] = useState([]);
-  const [activeTab, setActiveTab] = useState('full'); // 'full' | 'perday' | 'summary'
-  const [selectedDate, setSelectedDate] = useState(''); // Empty = show all or prompt calendar
+  const [activeTab, setActiveTab] = useState('full');
+  const [selectedDate, setSelectedDate] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedChartSymbol, setSelectedChartSymbol] = useState(null);
 
-  // Deposit Modal State
   const [isEditingDeposit, setIsEditingDeposit] = useState(false);
   const [depositInput, setDepositInput] = useState('');
 
-  // PDF Upload & Left PDF Viewer State
-  const [uploadStatus, setUploadStatus] = useState(null); // { type: 'error' | 'success', message: string }
+  const [uploadStatus, setUploadStatus] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [showLeftPdf, setShowLeftPdf] = useState(false); // Collapsed by default
+  const [showLeftPdf, setShowLeftPdf] = useState(false);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState(null);
   const [uploadedPdfName, setUploadedPdfName] = useState('');
   const fileInputRef = useRef(null);
 
-  // Buying & Selling Summary Filter State
-  const [summaryFilter, setSummaryFilter] = useState('1M'); // '1M' | '1Y' | 'CUSTOM'
+  const [summaryFilter, setSummaryFilter] = useState('1M');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
-  // Initialize Demo Account in Local Storage & Restore Active Session if logged in
   useEffect(() => {
     const existingUsersRaw = localStorage.getItem(STORAGE_USERS_KEY);
     let users = existingUsersRaw ? JSON.parse(existingUsersRaw) : [];
 
-    // Ensure only Tanvir's demo account exists by default (Shaoun completely removed)
     users = users.filter((u) => u.uid !== 'demo-shaoun-br8576');
     const tanvirExists = users.some((u) => u.email.toLowerCase() === DEMO_ACCOUNT.email.toLowerCase());
     if (!tanvirExists) {
@@ -86,13 +78,11 @@ export default function App() {
     }
     localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
 
-    // Seed Tanvir's demo trades if not present
     const tanvirTradesKey = STORAGE_TRADES_PREFIX + DEMO_ACCOUNT.uid;
     if (!localStorage.getItem(tanvirTradesKey)) {
       localStorage.setItem(tanvirTradesKey, JSON.stringify(INITIAL_DEMO_TRADES));
     }
 
-    // Restore active session
     const savedSession = localStorage.getItem(STORAGE_SESSION_KEY);
     if (savedSession) {
       try {
@@ -127,7 +117,6 @@ export default function App() {
     localStorage.setItem(STORAGE_TRADES_PREFIX + uid, JSON.stringify(updatedTrades));
   };
 
-  // Handle Login Submission (Supports Browser Password Manager Autofill & Save)
   const handleSignIn = (e) => {
     e.preventDefault();
     setAuthError('');
@@ -150,7 +139,6 @@ export default function App() {
     setLoginPassword('');
   };
 
-  // Handle Sign Up Submission (Immediately enters workspace & triggers browser save password prompt)
   const handleSignUp = (e) => {
     e.preventDefault();
     setAuthError('');
@@ -182,12 +170,10 @@ export default function App() {
     localStorage.setItem(STORAGE_TRADES_PREFIX + newUser.uid, JSON.stringify([]));
     localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(newUser));
 
-    // Directly enter the user's workspace
     setCurrentUser(newUser);
     setTrades([]);
     setSelectedDate(new Date().toISOString().split('T')[0]);
 
-    // Clear signup fields
     setSignupName('');
     setSignupClientCode('');
     setSignupBoId('');
@@ -195,7 +181,6 @@ export default function App() {
     setSignupPassword('');
   };
 
-  // Handle Logout -> Always returns directly to Sign In page with blank inputs
   const handleLogout = () => {
     localStorage.removeItem(STORAGE_SESSION_KEY);
     setCurrentUser(null);
@@ -207,9 +192,9 @@ export default function App() {
     setUploadStatus(null);
     setUploadedPdfUrl(null);
     setShowLeftPdf(false);
+    setSelectedChartSymbol(null);
   };
 
-  // Update Deposit Amount
   const handleSaveDeposit = () => {
     const val = parseFloat(depositInput);
     if (isNaN(val) || val < 0) return;
@@ -225,7 +210,6 @@ export default function App() {
     setIsEditingDeposit(false);
   };
 
-  // Handle PDF Upload with Strict Trading Validation
   const handlePdfUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -260,11 +244,8 @@ export default function App() {
     }
   };
 
-  // Compute Full Share Information (Includes Active Holdings + Sold Shares with Buy Date, Sell Date, and Realized/Unrealized Profit)
   const fullShareHoldings = useMemo(() => {
     const map = {};
-
-    // Sort trades chronologically so buy/sell dates are tracked accurately
     const chronological = [...trades].sort((a, b) => a.date.localeCompare(b.date));
 
     for (const tr of chronological) {
@@ -355,7 +336,6 @@ export default function App() {
       );
   }, [trades, searchQuery]);
 
-  // Portfolio Summary Metrics
   const portfolioSummary = useMemo(() => {
     let totalActiveCost = 0;
     let totalActiveMarketValue = 0;
@@ -376,7 +356,6 @@ export default function App() {
     };
   }, [fullShareHoldings]);
 
-  // Per-Day Trading Filtered strictly by Calendar Date Picker
   const perDayTrades = useMemo(() => {
     return trades.filter((tr) => {
       const matchesDate = selectedDate ? tr.date === selectedDate : true;
@@ -387,7 +366,6 @@ export default function App() {
     });
   }, [trades, selectedDate, searchQuery]);
 
-  // Buying & Selling Summary Filtered Data
   const summaryTrades = useMemo(() => {
     const now = new Date('2026-11-23');
     return trades.filter((tr) => {
@@ -423,14 +401,15 @@ export default function App() {
     return { buys, sells, boughtQty, boughtValue, soldQty, soldValue, totalComm };
   }, [summaryTrades]);
 
-  // ============================================================================
-  // VIEW 1: AUTHENTICATION PAGE (LOGIN & SIGN UP)
-  // ============================================================================
+  const activeShareForGraph = useMemo(() => {
+    if (!selectedChartSymbol) return null;
+    return fullShareHoldings.find((s) => s.instrument === selectedChartSymbol) || null;
+  }, [selectedChartSymbol, fullShareHoldings]);
+
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 md:p-8">
         <div className="max-w-5xl w-full bg-white rounded-3xl shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 border border-slate-200">
-          {/* Left Branding & Single Demo Credential Panel */}
           <div className="lg:col-span-6 bg-[#0B2B4C] text-white p-8 md:p-10 flex flex-col justify-between">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-xs font-medium text-sky-200 mb-6">
@@ -473,7 +452,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Clean Demo Login Credentials Box (No quick-click user cards) */}
             <div className="pt-6 border-t border-white/15">
               <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3">
                 ডেমো অ্যাকাউন্ট লগইন তথ্য (Tanvir — LankaBangla):
@@ -495,9 +473,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Right Form Panel (Sign In / Sign Up) */}
           <div className="lg:col-span-6 p-8 md:p-10 flex flex-col justify-center bg-white">
-            {/* Mode Switcher Tabs */}
             <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-xl mb-8">
               <button
                 type="button"
@@ -505,11 +481,10 @@ export default function App() {
                   setAuthMode('signin');
                   setAuthError('');
                 }}
-                className={`py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${
-                  authMode === 'signin'
-                    ? 'bg-white text-[#0B2B4C] shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${authMode === 'signin'
+                  ? 'bg-white text-[#0B2B4C] shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 লগইন (Sign In)
               </button>
@@ -519,11 +494,10 @@ export default function App() {
                   setAuthMode('signup');
                   setAuthError('');
                 }}
-                className={`py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${
-                  authMode === 'signup'
-                    ? 'bg-white text-[#0B2B4C] shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${authMode === 'signup'
+                  ? 'bg-white text-[#0B2B4C] shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 নতুন অ্যাকাউন্ট (Create Account)
               </button>
@@ -758,12 +732,8 @@ export default function App() {
     );
   }
 
-  // ============================================================================
-  // VIEW 2: MAIN PORTFOLIO DASHBOARD
-  // ============================================================================
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Top Navbar */}
       <header className="bg-[#0B2B4C] text-white px-4 md:px-8 py-3.5 shadow-md sticky top-0 z-30">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -814,7 +784,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content Layout (Optional Collapsible Left PDF Viewer + Right Workspace) */}
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
         {showLeftPdf && uploadedPdfUrl && (
           <aside className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[78vh] sticky top-20">
@@ -839,9 +808,7 @@ export default function App() {
         )}
 
         <main className={showLeftPdf && uploadedPdfUrl ? 'lg:col-span-7 space-y-6' : 'lg:col-span-12 space-y-6'}>
-          {/* 4 Summary Metric Cards */}
           <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            {/* Active Investor Card */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
               <p className="text-xs font-medium text-slate-500 mb-1">Active Investor Account</p>
               <p className="text-lg font-bold text-slate-900 truncate">{currentUser.name}</p>
@@ -850,7 +817,6 @@ export default function App() {
               </p>
             </div>
 
-            {/* Total Deposit Card */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs font-medium text-slate-500">Total Deposit Amount</p>
@@ -889,7 +855,6 @@ export default function App() {
               <p className="text-xs text-slate-400 mt-1">Ledger Capital Balance</p>
             </div>
 
-            {/* Active Share Buying Cost */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
               <p className="text-xs font-medium text-slate-500 mb-1">Active Share Buying Cost</p>
               <p className="text-2xl font-bold text-[#0B2B4C]">
@@ -900,19 +865,16 @@ export default function App() {
               </p>
             </div>
 
-            {/* Total Net Gain / Loss */}
             <div
-              className={`p-5 rounded-2xl border shadow-sm ${
-                portfolioSummary.totalNetProfit >= 0
-                  ? 'bg-emerald-50/70 border-emerald-200'
-                  : 'bg-rose-50/70 border-rose-200'
-              }`}
+              className={`p-5 rounded-2xl border shadow-sm ${portfolioSummary.totalNetProfit >= 0
+                ? 'bg-emerald-50/70 border-emerald-200'
+                : 'bg-rose-50/70 border-rose-200'
+                }`}
             >
               <p className="text-xs font-medium text-slate-600 mb-1">Total Net Gain / Loss (Realized + Unrealized)</p>
               <p
-                className={`text-2xl font-bold flex items-center gap-1 ${
-                  portfolioSummary.totalNetProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                }`}
+                className={`text-2xl font-bold flex items-center gap-1 ${portfolioSummary.totalNetProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                  }`}
               >
                 {portfolioSummary.totalNetProfit >= 0 ? (
                   <ArrowUpRight className="w-5 h-5" />
@@ -929,14 +891,12 @@ export default function App() {
                   {portfolioSummary.netPct.toFixed(2)}%)
                 </span>
               </p>
-              <p className="text-xs text-slate-500 mt-1">Click any share row for price trend graph</p>
+              <p className="text-xs text-slate-500 mt-1">Click any share row or Graph for details chart</p>
             </div>
           </section>
 
-          {/* Action Toolbar: Calendar Date Picker (No bloated date dropdown list) + Search + PDF Upload */}
           <section className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
-              {/* Custom Calendar Date Selector */}
               <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2">
                 <Calendar className="w-4 h-4 text-[#0B2B4C] shrink-0" />
                 <div className="flex flex-col">
@@ -956,7 +916,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Search Company Input */}
               <div className="relative flex-1">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -968,7 +927,6 @@ export default function App() {
                 />
               </div>
 
-              {/* PDF Upload Control */}
               <div className="flex flex-col items-end">
                 <input
                   ref={fileInputRef}
@@ -989,7 +947,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Pre-Upload Mandatory Instruction Banner */}
             <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200/80 rounded-xl px-3.5 py-2">
               <Info className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
@@ -997,14 +954,12 @@ export default function App() {
               </span>
             </div>
 
-            {/* Validation Feedback Alert */}
             {uploadStatus && (
               <div
-                className={`p-3.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-3 ${
-                  uploadStatus.type === 'error'
-                    ? 'bg-rose-50 border-rose-200 text-rose-800'
-                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                }`}
+                className={`p-3.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-3 ${uploadStatus.type === 'error'
+                  ? 'bg-rose-50 border-rose-200 text-rose-800'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   {uploadStatus.type === 'error' ? (
@@ -1025,16 +980,14 @@ export default function App() {
             )}
           </section>
 
-          {/* Navigation Tabs */}
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={() => setActiveTab('full')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                activeTab === 'full'
-                  ? 'bg-[#0B2B4C] text-white shadow-sm'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-              }`}
+              className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${activeTab === 'full'
+                ? 'bg-[#0B2B4C] text-white shadow-sm'
+                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                }`}
             >
               <Layers className="w-4 h-4" />
               <span>Full Share Information (All Holdings & Sold History)</span>
@@ -1043,11 +996,10 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('perday')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                activeTab === 'perday'
-                  ? 'bg-[#0B2B4C] text-white shadow-sm'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-              }`}
+              className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${activeTab === 'perday'
+                ? 'bg-[#0B2B4C] text-white shadow-sm'
+                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                }`}
             >
               <RefreshCw className="w-4 h-4" />
               <span>Per-Day Trading ({selectedDate || 'Select Date'})</span>
@@ -1056,20 +1008,16 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('summary')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                activeTab === 'summary'
-                  ? 'bg-[#0B2B4C] text-white shadow-sm'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-              }`}
+              className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${activeTab === 'summary'
+                ? 'bg-[#0B2B4C] text-white shadow-sm'
+                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                }`}
             >
               <Filter className="w-4 h-4" />
               <span>Buying & Selling Summary</span>
             </button>
           </div>
 
-          {/* ==================================================================
-              TAB 1: FULL SHARE INFORMATION (Complete History: Buy Date, Sell Date, Status, Profit/Loss)
-          ================================================================== */}
           {activeTab === 'full' && (
             <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
@@ -1083,7 +1031,7 @@ export default function App() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500">
-                  কেনার তারিখ, বিক্রির তারিখ এবং লাভ-লস সহ সম্পূর্ণ শেয়ার রেকর্ড
+                  কেনার তারিখ, বিক্রির তারিখ, লাভ-লস এবং Details Graph দেখতে যেকোনো শেয়ারে ক্লিক করুন
                 </p>
               </div>
 
@@ -1117,26 +1065,25 @@ export default function App() {
                     ) : (
                       fullShareHoldings.map((row) => {
                         const isProfit = row.totalNetProfit >= 0;
+                        const isSelected = selectedChartSymbol === row.instrument;
                         return (
                           <tr
                             key={row.instrument}
                             onClick={() =>
-                              setSelectedChartSymbol(
-                                selectedChartSymbol === row.instrument ? null : row.instrument
-                              )
+                              setSelectedChartSymbol(isSelected ? null : row.instrument)
                             }
-                            className="hover:bg-slate-50/90 transition-colors cursor-pointer"
+                            className={`transition-colors cursor-pointer ${isSelected ? 'bg-sky-50/80' : 'hover:bg-slate-50/90'
+                              }`}
                           >
                             <td className="py-3.5 px-4">
                               <div className="font-bold text-slate-900">{row.instrument}</div>
                               <span
-                                className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  row.status === 'SOLD OUT'
-                                    ? 'bg-purple-100 text-purple-700'
-                                    : row.status === 'PARTIAL SOLD'
+                                className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold ${row.status === 'SOLD OUT'
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : row.status === 'PARTIAL SOLD'
                                     ? 'bg-amber-100 text-amber-800'
                                     : 'bg-sky-100 text-sky-700'
-                                }`}
+                                  }`}
                               >
                                 {row.status}
                               </span>
@@ -1206,9 +1153,16 @@ export default function App() {
                             <td className="py-3.5 px-4 text-center">
                               <button
                                 type="button"
-                                className="px-2.5 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedChartSymbol(isSelected ? null : row.instrument);
+                                }}
+                                className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${isSelected
+                                  ? 'bg-[#0B2B4C] text-white border-[#0B2B4C]'
+                                  : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                  }`}
                               >
-                                {selectedChartSymbol === row.instrument ? 'Close' : 'Graph'}
+                                {isSelected ? 'Close' : 'Graph'}
                               </button>
                             </td>
                           </tr>
@@ -1219,46 +1173,13 @@ export default function App() {
                 </table>
               </div>
 
-              {/* Inline Price Trend Visual when a row is clicked */}
-              {selectedChartSymbol && (
-                <div className="p-5 bg-slate-50 border-t border-slate-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold text-slate-800">
-                      Trade Price Timeline — {selectedChartSymbol}
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedChartSymbol(null)}
-                      className="text-xs text-slate-500 hover:text-slate-800"
-                    >
-                      Close Chart
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    {fullShareHoldings
-                      .find((s) => s.instrument === selectedChartSymbol)
-                      ?.historyPoints.map((pt, idx) => (
-                        <div
-                          key={idx}
-                          className={`px-3.5 py-2 rounded-xl border text-xs ${
-                            pt.type === 'BUY'
-                              ? 'bg-blue-50 border-blue-200 text-blue-800'
-                              : 'bg-purple-50 border-purple-200 text-purple-800'
-                          }`}
-                        >
-                          <span className="font-bold">{pt.type}</span> • {pt.date} •{' '}
-                          <strong>৳{pt.price.toFixed(2)}</strong>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
+              <ShareDetailGraph
+                shareRow={activeShareForGraph}
+                onClose={() => setSelectedChartSymbol(null)}
+              />
             </section>
           )}
 
-          {/* ==================================================================
-              TAB 2: PER-DAY TRADING (Driven solely by Custom Calendar Date Picker)
-          ================================================================== */}
           {activeTab === 'perday' && (
             <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
@@ -1309,11 +1230,10 @@ export default function App() {
                             <td className="py-3.5 px-4 font-mono text-xs text-slate-600">{tr.date}</td>
                             <td className="py-3.5 px-3">
                               <span
-                                className={`px-2.5 py-1 rounded-md text-xs font-bold ${
-                                  tr.type === 'BUY'
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'bg-purple-100 text-purple-700'
-                                }`}
+                                className={`px-2.5 py-1 rounded-md text-xs font-bold ${tr.type === 'BUY'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-purple-100 text-purple-700'
+                                  }`}
                               >
                                 {tr.type}
                               </span>
@@ -1332,11 +1252,10 @@ export default function App() {
                             </td>
                             <td className="py-3.5 px-4 text-right">
                               <span
-                                className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                                  pnl >= 0
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : 'bg-rose-100 text-rose-800'
-                                }`}
+                                className={`px-2.5 py-1 rounded-full text-xs font-bold ${pnl >= 0
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-rose-100 text-rose-800'
+                                  }`}
                               >
                                 {pnl >= 0 ? `+৳${pnl.toFixed(2)}` : `-৳${Math.abs(pnl).toFixed(2)}`}
                               </span>
@@ -1351,9 +1270,6 @@ export default function App() {
             </section>
           )}
 
-          {/* ==================================================================
-              TAB 3: BUYING & SELLING SUMMARY
-          ================================================================== */}
           {activeTab === 'summary' && (
             <section className="space-y-5">
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
@@ -1376,11 +1292,10 @@ export default function App() {
                       key={btn.id}
                       type="button"
                       onClick={() => setSummaryFilter(btn.id)}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                        summaryFilter === btn.id
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${summaryFilter === btn.id
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
                     >
                       {btn.label}
                     </button>

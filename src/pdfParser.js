@@ -3,7 +3,6 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
-// Strict keywords required to verify the document is an authentic DSE/CSE Brokerage Trade or Portfolio PDF
 const REQUIRED_TRADE_KEYWORDS = [
   'bo id',
   'client code',
@@ -25,12 +24,52 @@ const REQUIRED_TRADE_KEYWORDS = [
   'sell'
 ];
 
+const MONTHS = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12'
+};
+
+function parseBrokerDate(text) {
+  const mdy = text.match(/\b([A-Za-z]{3})\s+(\d{1,2}),\s*(\d{4})\b/);
+  if (mdy) {
+    const mm = MONTHS[mdy[1].toLowerCase()];
+    if (mm) return `${mdy[3]}-${mm}-${mdy[2].padStart(2, '0')}`;
+  }
+
+  const dmy = text.match(/\b(\d{1,2})-([A-Za-z]{3})-(\d{4})\b/);
+  if (dmy) {
+    const mm = MONTHS[dmy[2].toLowerCase()];
+    if (mm) return `${dmy[3]}-${mm}-${dmy[1].padStart(2, '0')}`;
+  }
+
+  const iso = text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (iso) return iso[1];
+
+  return new Date().toISOString().split('T')[0];
+}
+
+function parseNum(str) {
+  if (!str) return 0;
+  return parseFloat(String(str).replace(/,/g, '')) || 0;
+}
+
+async function computeBufferHash(arrayBuffer) {
+  if (window.crypto && window.crypto.subtle) {
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', arrayBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  return `len-${arrayBuffer.byteLength}`;
+}
+
 export async function parseAndValidateTradePdf(file) {
   if (!file || file.type !== 'application/pdf') {
     throw new Error('শুধুমাত্র PDF ফাইল আপলোড করা যাবে।');
   }
 
   const arrayBuffer = await file.arrayBuffer();
+  const fileHash = await computeBufferHash(arrayBuffer);
+
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdf = await loadingTask.promise;
 
@@ -43,91 +82,142 @@ export async function parseAndValidateTradePdf(file) {
   }
 
   const normalizedText = fullText.toLowerCase();
-
-  // Count how many stock market / brokerage keywords appear in the PDF
   const matchedKeywords = REQUIRED_TRADE_KEYWORDS.filter((kw) =>
     normalizedText.includes(kw)
   );
 
-  // Reject non-trading PDFs (e.g., books, novels, receipts, CVs, random documents)
   const hasMarketContext =
     matchedKeywords.includes('dse') ||
-    matchedKeywords.includes('dhaka stock exchange') ||
     matchedKeywords.includes('cse') ||
     matchedKeywords.includes('bo id') ||
     matchedKeywords.includes('client code') ||
     matchedKeywords.includes('trade confirmation') ||
     matchedKeywords.includes('portfolio statement') ||
-    matchedKeywords.includes('howla') ||
-    matchedKeywords.includes('brokerage') ||
-    matchedKeywords.includes('securities');
+    matchedKeywords.includes('brokerage');
 
   if (matchedKeywords.length < 3 || !hasMarketContext) {
     throw new Error(
-      'Invalid PDF Rejected! এটি কোনো শেয়ার ট্রেডিং (Trade Confirmation বা Portfolio Statement) PDF নয়। শুধুমাত্র ব্রোকারেজ হাউজের ট্রেডিং বা পোর্টফোলিও PDF আপলোড করুন।'
+      `Invalid PDF Rejected (${file.name})! এটি কোনো শেয়ার ট্রেডিং PDF নয়।`
     );
   }
 
-  // Extract date from text or fallback to today's date
-  const dateMatch = fullText.match(/(\d{4}-\d{2}-\d{2})|(\d{2}[\/\-]\d{2}[\/\-]\d{4})|(\d{2}\s+[A-Za-z]{3}\s+\d{4})/);
-  let tradeDate = new Date().toISOString().split('T')[0];
-  if (dateMatch) {
-    const rawDate = dateMatch[0];
-    const parsed = new Date(rawDate);
-    if (!isNaN(parsed.getTime())) {
-      tradeDate = parsed.toISOString().split('T')[0];
+  const cleanedText = fullText
+    .replace(/\bDUTCHBANG\s+L\b/g, 'DUTCHBANGL')
+    .replace(/\bSQURPHAR\s+MA\b/g, 'SQURPHARMA')
+    .replace(/\bNAVANAPHA\s+R\b/g, 'NAVANAPHAR')
+    .replace(/\bBDTHAIFOO\s+D\b/g, 'BDTHAIFOOD')
+    .replace(/\s+/g, ' ');
+
+  const isPortfolioStatement =
+    normalizedText.includes('portfolio statement') ||
+    normalizedText.includes('salable quantity');
+
+  const clientMatch = cleanedText.match(/(?:Client Code|Investor Code)\s*:\s*([A-Z0-9]+)/i);
+  const clientCode = clientMatch ? clientMatch[1] : 'UNKNOWN';
+
+  if (isPortfolioStatement) {
+    const asOnMatch = cleanedText.match(/Portfolio statement as on:\s*([0-9]{1,2}-[A-Za-z]{3}-[0-9]{4})/i);
+    const statementDate = asOnMatch ? parseBrokerDate(asOnMatch[1]) : parseBrokerDate(cleanedText);
+
+    const depositMatch = cleanedText.match(/Total Deposit\s*:\s*([\d,]+\.\d{2})/i) ||
+                         cleanedText.match(/Deposit\s*:\s*([\d,]+\.\d{2})/i);
+    const totalDeposit = depositMatch ? parseNum(depositMatch[1]) : 0;
+
+    const ledgerMatch = cleanedText.match(/Ledger Balance\/(?:Liabilities)\s*:\s*([\d,]+\.\d{2})/i);
+    const ledgerBalance = ledgerMatch ? parseNum(ledgerMatch[1]) : 0;
+
+    const holdings = [];
+    const portfolioRowRegex = /\b([A-Z]{2,12})\*?\s+([ABZNG])\s+(\d+)\s+(\d+)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/g;
+    let m;
+    while ((m = portfolioRowRegex.exec(cleanedText)) !== null) {
+      const symbol = m[1];
+      if (['TOTAL', 'PAGE', 'RATIO', 'VALUE'].includes(symbol)) continue;
+      holdings.push({
+        instrument: symbol,
+        group: m[2],
+        qty: parseInt(m[3], 10),
+        salableQty: parseInt(m[4], 10),
+        avgCostWithComm: parseNum(m[5]),
+        totalCostWithComm: parseNum(m[6]),
+        marketPrice: parseNum(m[7]),
+        marketValue: parseNum(m[8])
+      });
     }
+
+    const docFingerprint = `${fileHash}|PORTFOLIO|${clientCode}|${statementDate}|${holdings.length}`;
+
+    return {
+      docType: 'PORTFOLIO_STATEMENT',
+      docFingerprint,
+      fileHash,
+      fileName: file.name,
+      detectedDate: statementDate,
+      clientCode,
+      totalDeposit,
+      ledgerBalance,
+      holdings,
+      trades: []
+    };
   }
 
-  // Extract trade rows dynamically
+  const tradingDateMatch = cleanedText.match(/Trading Date\s*:\s*([A-Za-z]{3}\s+\d{1,2},\s*\d{4}|\d{4}-\d{2}-\d{2})/i);
+  const tradeDate = tradingDateMatch ? parseBrokerDate(tradingDateMatch[1]) : parseBrokerDate(cleanedText);
+
+  const openMatch = cleanedText.match(/Opening Balance\(Tk\.\)\s*:\s*([\d,]+\.\d{2})/i);
+  const closeMatch = cleanedText.match(/Closing Balance\(Tk\.\)\s*:\s*([\d,]+\.\d{2})/i);
+  const openingBalance = openMatch ? parseNum(openMatch[1]) : null;
+  const closingBalance = closeMatch ? parseNum(closeMatch[1]) : null;
+
   const extractedTrades = [];
-  const lines = fullText.split(/\n/);
+  const tradeRowRegex = /\b(?:Public|Spot|Block)\s+(BUY|SELL)\s+(?:DSE|CSE)\s+([ABZNG])\s+([A-Z]{2,12})\s+(\d+(?:,\d+)?)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/g;
 
-  // Pattern matching typical DSE trade confirmation & portfolio rows
-  const rowRegex = /\b([A-Z]{2,12})\b\s+([ABZNG])?\s*(BUY|SELL|B|S)?\s*(\d+(?:,\d+)?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)?/g;
+  let match;
+  while ((match = tradeRowRegex.exec(cleanedText)) !== null) {
+    const type = match[1];
+    const group = match[2];
+    const symbol = match[3];
+    const qty = parseInt(match[4].replace(/,/g, ''), 10);
+    const avgRate = parseNum(match[5]);
+    const grossAmount = parseNum(match[6]);
+    const commission = parseNum(match[7]);
+    const netTotal = parseNum(match[9]);
 
-  for (const line of lines) {
-    let match;
-    while ((match = rowRegex.exec(line)) !== null) {
-      const symbol = match[1];
-      const blacklist = ['DSE', 'CSE', 'BUY', 'SELL', 'TOTAL', 'DATE', 'TIME', 'CODE', 'PAGE', 'NET', 'TAX', 'VAT', 'LTD', 'LIMITED', 'STATEMENT', 'PORTFOLIO', 'TRADE', 'CLIENT', 'INVESTOR', 'BROKERAGE', 'SECURITIES', 'AMOUNT', 'PRICE', 'QTY', 'BALANCE'];
-      if (blacklist.includes(symbol)) continue;
-
-      const group = match[2] || 'A';
-      const rawSide = match[3] || (normalizedText.includes('sell') && !normalizedText.includes('buy') ? 'SELL' : 'BUY');
-      const type = rawSide === 'S' || rawSide === 'SELL' ? 'SELL' : 'BUY';
-      const qty = parseInt(match[4].replace(/,/g, ''), 10);
-      const price1 = parseFloat(match[5]);
-      const price2 = match[6] ? parseFloat(match[6]) : price1;
-
-      if (qty > 0 && price1 > 0 && price1 < 50000) {
-        const totalVal = qty * price1;
-        const commission = Number((totalVal * 0.004).toFixed(2));
-        extractedTrades.push({
-          id: `tr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          date: tradeDate,
-          type,
-          instrument: symbol,
-          group,
-          qty,
-          buyPrice: type === 'BUY' ? price1 : price2,
-          sellPrice: type === 'SELL' ? price1 : price2,
-          commission,
-          sourcePdf: file.name
-        });
-      }
+    if (qty > 0 && avgRate > 0) {
+      extractedTrades.push({
+        id: `tr-${tradeDate}-${symbol}-${type}-${qty}-${avgRate}`,
+        date: tradeDate,
+        type,
+        instrument: symbol,
+        group,
+        qty,
+        buyPrice: type === 'BUY' ? avgRate : 0,
+        sellPrice: type === 'SELL' ? avgRate : 0,
+        grossAmount,
+        commission,
+        netTotal,
+        sourcePdf: file.name
+      });
     }
   }
 
   if (extractedTrades.length === 0) {
     throw new Error(
-      'PDF টি ট্রেডিং ডকুমেন্ট হিসেবে শনাক্ত হলেও এর ভেতরে কোনো বৈধ শেয়ার বাই/সেল ডাটা পাওয়া যায়নি। সঠিক Trade Confirmation বা Portfolio PDF আপলোড করুন।'
+      `PDF (${file.name}) থেকে কোনো বৈধ BUY/SELL ট্রেড সারি পাওয়া যায়নি।`
     );
   }
 
+  const tradeSig = extractedTrades.map((t) => `${t.instrument}:${t.type}:${t.qty}@${t.buyPrice || t.sellPrice}`).join(',');
+  const docFingerprint = `${fileHash}|TRADE|${clientCode}|${tradeDate}|${tradeSig}`;
+
   return {
-    trades: extractedTrades,
+    docType: 'TRADE_CONFIRMATION',
+    docFingerprint,
+    fileHash,
     fileName: file.name,
-    detectedDate: tradeDate
+    detectedDate: tradeDate,
+    clientCode,
+    openingBalance,
+    closingBalance,
+    trades: extractedTrades
   };
 }

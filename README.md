@@ -1,5 +1,15 @@
-# DSE Portfolio & Trade Statement Analyzer (v2.0)
-- Separate **Full Share Information (Portfolio)** tab & **Per-Day Trading (Trade Confirmation)** tab.
-- **Buying & Selling Summary** tab with **Last 1 Month**, **Last 1 Year**, and **Custom Date Range** filters.
-- **Left-Side Split PDF Viewer**: Upload Portfolio or Trade PDFs, store in **Firebase Storage + Firestore**, and preview side-by-side with extracted tables.
-- **Buying Price (Tk.)**, **Selling Price (Tk.)**, **Profit/Gain (Green)**, **Loss (Red)** columns + Clickable **Trend Graph**.
+# DSE Multi-Brokerage Portfolio & Profit-Loss Tracker (v4)
+
+## Setup & Run Instructions
+1. Extract the ZIP file and open the folder in your terminal.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the local development server:
+   ```bash
+   npm run dev
+   ```
+4. Demo Login Credentials (Tanvir Ahmed Chowdhury — LankaBangla):
+   - **Email:** `tanvir@lankabangla.demo`
+   - **Password:** `password123`

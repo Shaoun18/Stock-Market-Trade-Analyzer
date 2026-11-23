@@ -1,5 +1,15 @@
-# DSE Multi-Brokerage Portfolio & Trade Analyzer (v5.0)
-- Exact Bengali/English split Login & Registration card design.
-- Single "Upload the PDF file" button with automatic Portfolio vs Trading PDF detection.
-- Uploaded PDF data always stays in "Full Share Information" across the entire database.
-- Per-Day Trading automatically syncs with your browser's current date (or any selected date).
+# DSE Multi-Brokerage Portfolio & Profit-Loss Tracker (v4)
+
+## Setup & Run Instructions
+1. Extract the ZIP file and open the folder in your terminal.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the local development server:
+   ```bash
+   npm run dev
+   ```
+4. Demo Login Credentials (Tanvir Ahmed Chowdhury — LankaBangla):
+   - **Email:** `tanvir@lankabangla.demo`
+   - **Password:** `password123`

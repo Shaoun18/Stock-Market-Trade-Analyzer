@@ -766,12 +766,12 @@ export default function App() {
       .flatMap(([, list]) => (Array.isArray(list) ? list : []));
   }, [pdfsByDate]);
 
+  // Strictly bind the PDF viewer to the currently selected date.
   const activePdfToDisplay = useMemo(() => {
-    const pool = pdfsForSelectedDate.length > 0 ? pdfsForSelectedDate : allUploadedPdfs;
-    if (pool.length === 0) return null;
-    const matched = pool.find((p) => p.id === selectedPdfId);
-    return matched || pool[pool.length - 1];
-  }, [pdfsForSelectedDate, allUploadedPdfs, selectedPdfId]);
+    if (pdfsForSelectedDate.length === 0) return null;
+    const matched = pdfsForSelectedDate.find((p) => p.id === selectedPdfId);
+    return matched || pdfsForSelectedDate[pdfsForSelectedDate.length - 1];
+  }, [pdfsForSelectedDate, selectedPdfId]);
 
   const hasAnyUploadedPdf = allUploadedPdfs.length > 0;
 
@@ -1184,6 +1184,8 @@ export default function App() {
     const datePdfs = pdfsByDate[dateStr];
     if (Array.isArray(datePdfs) && datePdfs.length > 0) {
       setSelectedPdfId(datePdfs[datePdfs.length - 1].id);
+    } else {
+      setSelectedPdfId('');
     }
   };
 
@@ -1274,8 +1276,8 @@ export default function App() {
                   setAuthError('');
                 }}
                 className={`py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${authMode === 'signin'
-                    ? 'bg-white text-[#0B2B4C] shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-[#0B2B4C] shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
                   }`}
               >
                 লগইন (Sign In)
@@ -1287,8 +1289,8 @@ export default function App() {
                   setAuthError('');
                 }}
                 className={`py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${authMode === 'signup'
-                    ? 'bg-white text-[#0B2B4C] shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-[#0B2B4C] shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
                   }`}
               >
                 নতুন অ্যাকাউন্ট (Create Account)
@@ -1332,8 +1334,8 @@ export default function App() {
                       onChange={(e) => setLoginEmail(e.target.value)}
                       placeholder="আপনার ইমেইল লিখুন (যেমন: tanvir@lankabangla.demo)"
                       className={`w-full pl-10 pr-4 py-3 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 transition-all ${showLoginEmailErr
-                          ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
-                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                        ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
+                        : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
                         }`}
                     />
                   </div>
@@ -1377,8 +1379,8 @@ export default function App() {
                       onChange={(e) => setLoginPassword(e.target.value)}
                       placeholder="কমপক্ষে ৮ অক্ষরের পাসওয়ার্ড লিখুন"
                       className={`w-full pl-10 pr-4 py-3 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 transition-all ${showLoginPassErr
-                          ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
-                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                        ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
+                        : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
                         }`}
                     />
                   </div>
@@ -1428,8 +1430,8 @@ export default function App() {
                       onChange={(e) => setSignupName(e.target.value)}
                       placeholder="যেমন: MD. RAHIM UDDIN"
                       className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 ${showSignupNameErr
-                          ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
-                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                        ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
+                        : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
                         }`}
                     />
                   </div>
@@ -1462,8 +1464,8 @@ export default function App() {
                         onChange={(e) => setSignupClientCode(e.target.value)}
                         placeholder="যেমন: L84419"
                         className={`w-full pl-9 pr-3 py-2.5 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 ${showSignupCodeErr
-                            ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
-                            : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                          ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
+                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
                           }`}
                       />
                     </div>
@@ -1505,8 +1507,8 @@ export default function App() {
                       }}
                       placeholder="12018200..."
                       className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 ${showSignupBoErr
-                          ? 'bg-red-50/60 border-2 border-red-500 text-red-700 focus:ring-red-500'
-                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                        ? 'bg-red-50/60 border-2 border-red-500 text-red-700 focus:ring-red-500'
+                        : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
                         }`}
                     />
                     {showSignupBoErr && (
@@ -1566,8 +1568,8 @@ export default function App() {
                       onChange={(e) => setSignupEmail(e.target.value)}
                       placeholder="investor@gmail.com"
                       className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 ${showSignupEmailErr
-                          ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
-                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                        ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
+                        : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
                         }`}
                     />
                   </div>
@@ -1610,8 +1612,8 @@ export default function App() {
                       onChange={(e) => setSignupPassword(e.target.value)}
                       placeholder="কমপক্ষে ৮ অক্ষরের পাসওয়ার্ড দিন"
                       className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 ${showSignupPassErr
-                          ? 'bg-red-50/60 border-2 border-red-500 text-red-700 focus:ring-red-500'
-                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                        ? 'bg-red-50/60 border-2 border-red-500 text-red-700 focus:ring-red-500'
+                        : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
                         }`}
                     />
                   </div>
@@ -1672,8 +1674,8 @@ export default function App() {
                 type="button"
                 onClick={() => setShowLeftPdf((prev) => !prev)}
                 className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors ${showLeftPdf
-                    ? 'bg-amber-400 text-[#0B2B4C]'
-                    : 'bg-white/10 hover:bg-white/20 text-white'
+                  ? 'bg-amber-400 text-[#0B2B4C]'
+                  : 'bg-white/10 hover:bg-white/20 text-white'
                   }`}
               >
                 {showLeftPdf ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -1704,73 +1706,85 @@ export default function App() {
       </header>
 
       <div className="flex-1 w-full px-4 sm:px-6 lg:px-10 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {showLeftPdf && activePdfToDisplay && (
+        {showLeftPdf && (
           <aside className="w-full lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[55vh] sm:h-[65vh] lg:h-[82vh] lg:sticky lg:top-20">
-            <div className="px-4 py-3 bg-slate-100 border-b border-slate-200 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <span className="text-xs font-bold text-slate-800 block truncate">
-                    {activePdfToDisplay.name}
-                  </span>
-                  <span className="text-[11px] text-blue-700 font-mono">
-                    Date: {activePdfToDisplay.date} •{' '}
-                    {activePdfToDisplay.docType === 'PORTFOLIO_STATEMENT'
-                      ? 'Portfolio Statement'
-                      : 'Trade Confirmation'}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowLeftPdf(false)}
-                  className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-600 shrink-0"
-                  title="Close PDF Viewer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+            {activePdfToDisplay ? (
+              <>
+                <div className="px-4 py-3 bg-slate-100 border-b border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-slate-800 block truncate">
+                        {activePdfToDisplay.name}
+                      </span>
+                      <span className="text-[11px] text-blue-700 font-mono">
+                        Date: {activePdfToDisplay.date} •{' '}
+                        {activePdfToDisplay.docType === 'PORTFOLIO_STATEMENT'
+                          ? 'Portfolio Statement'
+                          : 'Trade Confirmation'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowLeftPdf(false)}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-600 shrink-0"
+                      title="Close PDF Viewer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
 
-              {(pdfsForSelectedDate.length > 1 || allUploadedPdfs.length > 1) && (
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                  {(pdfsForSelectedDate.length > 0 ? pdfsForSelectedDate : allUploadedPdfs).map(
-                    (pdfItem, idx) => {
-                      const isCurrent = activePdfToDisplay.id === pdfItem.id;
-                      return (
-                        <button
-                          key={pdfItem.id}
-                          type="button"
-                          onClick={() => setSelectedPdfId(pdfItem.id)}
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap flex items-center gap-1 transition-all ${isCurrent
-                              ? 'bg-[#0B2B4C] text-white shadow-sm'
-                              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
-                            }`}
-                        >
-                          <FileText className="w-3 h-3 shrink-0" />
-                          <span>
-                            PDF #{idx + 1}:{' '}
-                            {pdfItem.docType === 'PORTFOLIO_STATEMENT'
-                              ? 'Portfolio'
-                              : 'Trade Conf.'}
-                          </span>
-                        </button>
-                      );
-                    }
+                  {pdfsForSelectedDate.length > 1 && (
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                      {pdfsForSelectedDate.map((pdfItem, idx) => {
+                        const isCurrent = activePdfToDisplay.id === pdfItem.id;
+                        return (
+                          <button
+                            key={pdfItem.id}
+                            type="button"
+                            onClick={() => setSelectedPdfId(pdfItem.id)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap flex items-center gap-1 transition-all ${isCurrent
+                                ? 'bg-[#0B2B4C] text-white shadow-sm'
+                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                              }`}
+                          >
+                            <FileText className="w-3 h-3 shrink-0" />
+                            <span>
+                              PDF #{idx + 1}:{' '}
+                              {pdfItem.docType === 'PORTFOLIO_STATEMENT'
+                                ? 'Portfolio'
+                                : 'Trade Conf.'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            <iframe
-              key={activePdfToDisplay.id}
-              src={activePdfToDisplay.url}
-              title={`Trade PDF - ${activePdfToDisplay.name}`}
-              className="w-full flex-1 border-0 min-h-0"
-            />
+                <iframe
+                  key={`${selectedDate}-${activePdfToDisplay.id}`}
+                  src={activePdfToDisplay.url}
+                  title={`Trade PDF - ${activePdfToDisplay.name}`}
+                  className="w-full flex-1 border-0 min-h-0"
+                />
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+                <FileText className="w-10 h-10 text-slate-300 mb-3" />
+                <p className="text-sm font-bold text-slate-700">
+                  No PDF Uploaded for {selectedDate}
+                </p>
+                <p className="text-xs text-slate-500 mt-1 max-w-xs">
+                  এই তারিখের জন্য কোনো PDF আপলোড করা নেই। ক্যালেন্ডার থেকে সবুজ চিহ্নিত তারিখ বাছাই করুন অথবা নতুন PDF আপলোড করুন।
+                </p>
+              </div>
+            )}
           </aside>
         )}
 
         <main
           className={
-            showLeftPdf && activePdfToDisplay
+            showLeftPdf
               ? 'w-full lg:col-span-7 space-y-6 min-w-0'
               : 'w-full lg:col-span-12 space-y-6 min-w-0'
           }
@@ -1816,8 +1830,8 @@ export default function App() {
                 <span className="text-slate-500">Market Value:</span>
                 <span
                   className={`font-bold px-2 py-0.5 rounded-md ${isMarketGain
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-rose-100 text-rose-700'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-rose-100 text-rose-700'
                     }`}
                 >
                   ৳
@@ -1831,8 +1845,8 @@ export default function App() {
 
             <div
               className={`p-5 rounded-2xl border shadow-sm min-w-0 ${portfolioSummary.totalNetProfit >= 0
-                  ? 'bg-emerald-50/70 border-emerald-200'
-                  : 'bg-rose-50/70 border-rose-200'
+                ? 'bg-emerald-50/70 border-emerald-200'
+                : 'bg-rose-50/70 border-rose-200'
                 }`}
             >
               <p className="text-xs font-medium text-slate-600 mb-1">
@@ -1939,10 +1953,10 @@ export default function App() {
                                 : cell.dateStr
                             }
                             className={`relative h-9 rounded-lg text-xs font-semibold flex flex-col items-center justify-center transition-all ${isSelected
-                                ? 'bg-[#0B2B4C] text-white shadow-sm'
-                                : isMarked
-                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 hover:bg-emerald-200'
-                                  : 'text-slate-600 hover:bg-slate-100'
+                              ? 'bg-[#0B2B4C] text-white shadow-sm'
+                              : isMarked
+                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 hover:bg-emerald-200'
+                                : 'text-slate-600 hover:bg-slate-100'
                               }`}
                           >
                             <span>{cell.day}</span>
@@ -2014,8 +2028,8 @@ export default function App() {
                       setShowLeftPdf(true);
                     }}
                     className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors ${activePdfToDisplay?.id === pdfItem.id && showLeftPdf
-                        ? 'bg-[#0B2B4C] text-white border-[#0B2B4C]'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      ? 'bg-[#0B2B4C] text-white border-[#0B2B4C]'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                       }`}
                   >
                     <FileText className="w-3.5 h-3.5 text-amber-500" />
@@ -2039,8 +2053,8 @@ export default function App() {
             {uploadStatus && (
               <div
                 className={`p-3.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-3 transition-opacity duration-300 ${uploadStatus.type === 'error'
-                    ? 'bg-rose-50 border-rose-200 text-rose-800'
-                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  ? 'bg-rose-50 border-rose-200 text-rose-800'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-800'
                   }`}
               >
                 <div className="flex items-center gap-2">
@@ -2068,8 +2082,8 @@ export default function App() {
               type="button"
               onClick={() => setActiveTab('full')}
               className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${activeTab === 'full'
-                  ? 'bg-[#0B2B4C] text-white shadow-sm'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                ? 'bg-[#0B2B4C] text-white shadow-sm'
+                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
                 }`}
             >
               <Layers className="w-4 h-4 shrink-0" />
@@ -2080,8 +2094,8 @@ export default function App() {
               type="button"
               onClick={() => setActiveTab('perday')}
               className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${activeTab === 'perday'
-                  ? 'bg-[#0B2B4C] text-white shadow-sm'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                ? 'bg-[#0B2B4C] text-white shadow-sm'
+                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
                 }`}
             >
               <RefreshCw className="w-4 h-4 shrink-0" />
@@ -2092,8 +2106,8 @@ export default function App() {
               type="button"
               onClick={() => setActiveTab('summary')}
               className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${activeTab === 'summary'
-                  ? 'bg-[#0B2B4C] text-white shadow-sm'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                ? 'bg-[#0B2B4C] text-white shadow-sm'
+                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
                 }`}
             >
               <Filter className="w-4 h-4 shrink-0" />
@@ -2162,10 +2176,10 @@ export default function App() {
                               <div className="font-bold text-slate-900">{row.instrument}</div>
                               <span
                                 className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold ${row.status === 'SOLD OUT'
-                                    ? 'bg-purple-100 text-purple-700'
-                                    : row.status === 'PARTIAL SOLD'
-                                      ? 'bg-amber-100 text-amber-800'
-                                      : 'bg-sky-100 text-sky-700'
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : row.status === 'PARTIAL SOLD'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-sky-100 text-sky-700'
                                   }`}
                               >
                                 {row.status}
@@ -2258,8 +2272,8 @@ export default function App() {
                                   setSelectedChartSymbol(isSelected ? null : row.instrument);
                                 }}
                                 className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${isSelected
-                                    ? 'bg-[#0B2B4C] text-white border-[#0B2B4C]'
-                                    : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                  ? 'bg-[#0B2B4C] text-white border-[#0B2B4C]'
+                                  : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                                   }`}
                               >
                                 {isSelected ? 'Close' : 'Graph'}
@@ -2328,9 +2342,22 @@ export default function App() {
                           Number(tr.commission) > 0
                             ? Number(tr.commission)
                             : Number((gross * COMM_RATE).toFixed(2));
+                        const matchedHolding = fullShareHoldings.find(
+                          (h) => h.instrument === tr.instrument.toUpperCase()
+                        );
+                        const effectiveBuyPriceWithComm =
+                          Number(tr.buyPrice) > 0
+                            ? Number(tr.buyPrice) * (1 + COMM_RATE)
+                            : matchedHolding?.avgBuyPrice || Number(tr.sellPrice) * (1 + COMM_RATE);
                         const pnl =
                           tr.type === 'SELL'
-                            ? (Number(tr.sellPrice) - Number(tr.buyPrice)) * Number(tr.qty) - comm
+                            ? Number(
+                              (
+                                gross -
+                                comm -
+                                effectiveBuyPriceWithComm * Number(tr.qty)
+                              ).toFixed(2)
+                            )
                             : -comm;
                         return (
                           <tr key={tr.id} className="hover:bg-slate-50">
@@ -2340,8 +2367,8 @@ export default function App() {
                             <td className="py-3.5 px-3">
                               <span
                                 className={`px-2.5 py-1 rounded-md text-xs font-bold ${tr.type === 'BUY'
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'bg-purple-100 text-purple-700'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-purple-100 text-purple-700'
                                   }`}
                               >
                                 {tr.type}
@@ -2364,8 +2391,8 @@ export default function App() {
                             <td className="py-3.5 px-4 text-right">
                               <span
                                 className={`px-2.5 py-1 rounded-full text-xs font-bold ${pnl >= 0
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : 'bg-rose-100 text-rose-800'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-rose-100 text-rose-800'
                                   }`}
                               >
                                 {pnl >= 0
@@ -2406,8 +2433,8 @@ export default function App() {
                       type="button"
                       onClick={() => setSummaryFilter(btn.id)}
                       className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${summaryFilter === btn.id
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                         }`}
                     >
                       {btn.label}
@@ -2497,8 +2524,8 @@ export default function App() {
                       type="button"
                       onClick={() => setSummaryTradeTypeFilter('ALL')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${summaryTradeTypeFilter === 'ALL'
-                          ? 'bg-[#0B2B4C] text-white shadow-sm'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        ? 'bg-[#0B2B4C] text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                         }`}
                     >
                       All Shares
@@ -2507,8 +2534,8 @@ export default function App() {
                       type="button"
                       onClick={() => setSummaryTradeTypeFilter('BUY')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${summaryTradeTypeFilter === 'BUY'
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                         }`}
                     >
                       Bought Shares
@@ -2517,8 +2544,8 @@ export default function App() {
                       type="button"
                       onClick={() => setSummaryTradeTypeFilter('SOLD')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${summaryTradeTypeFilter === 'SOLD'
-                          ? 'bg-purple-600 text-white shadow-sm'
-                          : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
                         }`}
                     >
                       Sold Shares
@@ -2583,8 +2610,8 @@ export default function App() {
                               {item.soldQty > 0 ? (
                                 <span
                                   className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${item.realizedNetProfit >= 0
-                                      ? 'bg-emerald-100 text-emerald-800'
-                                      : 'bg-rose-100 text-rose-800'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-rose-100 text-rose-800'
                                     }`}
                                 >
                                   {item.realizedNetProfit >= 0

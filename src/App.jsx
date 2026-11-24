@@ -53,6 +53,62 @@ const STORAGE_MKT_PREFIX = 'dse_tracker_mkt_v6_';
 const STORAGE_STMT_PREFIX = 'dse_tracker_stmt_v6_';
 
 const COMM_RATE = 0.004; // 40 paisa per 100 Tk (0.40%)
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function validateSignInFields(email, password) {
+  const errors = {};
+  const trimmedEmail = (email || '').trim();
+  if (!trimmedEmail) {
+    errors.email = 'ইমেইল অ্যাড্রেস দেওয়া আবশ্যক।';
+  } else if (!EMAIL_REGEX.test(trimmedEmail)) {
+    errors.email = 'সঠিক ও বৈধ ইমেইল অ্যাড্রেস দিন (যেমন: name@domain.com)।';
+  }
+
+  if (!password) {
+    errors.password = 'পাসওয়ার্ড দেওয়া আবশ্যক।';
+  } else if (password.length < 8) {
+    errors.password = 'পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের (8 characters) হতে হবে।';
+  }
+  return errors;
+}
+
+function validateSignUpFields({ name, clientCode, boId, email, password }) {
+  const errors = {};
+  const trimmedName = (name || '').trim();
+  const trimmedCode = (clientCode || '').trim();
+  const trimmedBo = (boId || '').trim();
+  const trimmedEmail = (email || '').trim();
+
+  if (!trimmedName || trimmedName.length < 2) {
+    errors.name = 'বিনিয়োগকারীর পূর্ণ নাম লিখুন (কমপক্ষে ২ অক্ষর)।';
+  } else if (!/^[A-Za-z\u0980-\u09FF.\s-]+$/.test(trimmedName)) {
+    errors.name = 'নামে শুধুমাত্র অক্ষর, ডট (.) এবং স্পেস ব্যবহার করুন।';
+  }
+
+  if (!trimmedCode || trimmedCode.length < 2) {
+    errors.clientCode = 'সঠিক Investor / Client Code দিন।';
+  }
+
+  if (!trimmedBo) {
+    errors.boId = '১৬ ডিজিটের BO ID দেওয়া আবশ্যক।';
+  } else if (!/^\d{16}$/.test(trimmedBo)) {
+    errors.boId = `BO ID অবশ্যই ১৬ ডিজিটের হতে হবে (বর্তমানে ${trimmedBo.length} ডিজিট দেওয়া হয়েছে)।`;
+  }
+
+  if (!trimmedEmail) {
+    errors.email = 'ইমেইল অ্যাড্রেস দেওয়া আবশ্যক।';
+  } else if (!EMAIL_REGEX.test(trimmedEmail)) {
+    errors.email = 'সঠিক ও আসল ইমেইল অ্যাড্রেস দিন (যেমন: investor@gmail.com)।';
+  }
+
+  if (!password) {
+    errors.password = 'পাসওয়ার্ড দেওয়া আবশ্যক।';
+  } else if (password.length < 8) {
+    errors.password = `পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে (বর্তমানে ${password.length} অক্ষর)।`;
+  }
+
+  return errors;
+}
 
 export default function App() {
   const [authMode, setAuthMode] = useState('signin');
@@ -61,6 +117,7 @@ export default function App() {
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginTouched, setLoginTouched] = useState({});
   const [authError, setAuthError] = useState('');
 
   const [signupName, setSignupName] = useState('');
@@ -69,10 +126,10 @@ export default function App() {
   const [signupBrokerage, setSignupBrokerage] = useState('BRAC EPL Stock Brokerage Ltd.');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
+  const [signupTouched, setSignupTouched] = useState({});
 
   const [trades, setTrades] = useState([]);
   const [marketPrices, setMarketPrices] = useState({});
-  // Statement holdings & summary per date: { [date]: { holdings: [...], statementRealized, statementUnrealized, statementNetGain } }
   const [statementSnapshots, setStatementSnapshots] = useState({});
   const [importedHashes, setImportedHashes] = useState(() => {
     try {
@@ -82,7 +139,6 @@ export default function App() {
     }
   });
 
-  // Map of date ('YYYY-MM-DD') -> Array of PDF records [{ id, url, name, date, docType }]
   const [pdfsByDate, setPdfsByDate] = useState({});
   const [selectedPdfId, setSelectedPdfId] = useState('');
 
@@ -100,8 +156,26 @@ export default function App() {
   const calendarPopoverRef = useRef(null);
 
   const [summaryFilter, setSummaryFilter] = useState('1M');
+  const [summaryTradeTypeFilter, setSummaryTradeTypeFilter] = useState('ALL'); // 'ALL' | 'BUY' | 'SOLD'
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+
+  const loginValidationErrors = useMemo(
+    () => validateSignInFields(loginEmail, loginPassword),
+    [loginEmail, loginPassword]
+  );
+
+  const signupValidationErrors = useMemo(
+    () =>
+      validateSignUpFields({
+        name: signupName,
+        clientCode: signupClientCode,
+        boId: signupBoId,
+        email: signupEmail,
+        password: signupPassword
+      }),
+    [signupName, signupClientCode, signupBoId, signupEmail, signupPassword]
+  );
 
   useEffect(() => {
     if (!uploadStatus) return;
@@ -128,7 +202,6 @@ export default function App() {
     }
   }, [selectedDate]);
 
-  // Normalize pdfsByDate structure so each date always maps to an array of PDFs
   const normalizePdfMap = (rawMap) => {
     const out = {};
     if (!rawMap || typeof rawMap !== 'object') return out;
@@ -251,6 +324,7 @@ export default function App() {
     setPdfsByDate(loadedPdfs);
     setStatementSnapshots(loadedSnapshots);
 
+    // Always default to the latest chronological date across all stored data
     const allDates = [
       ...new Set([...loadedTrades.map((t) => t.date), ...Object.keys(loadedPdfs), ...Object.keys(loadedSnapshots)])
     ].sort();
@@ -258,7 +332,7 @@ export default function App() {
       const latestDt = allDates[allDates.length - 1];
       setSelectedDate(latestDt);
       if (loadedPdfs[latestDt]?.length > 0) {
-        setSelectedPdfId(loadedPdfs[latestDt][0].id);
+        setSelectedPdfId(loadedPdfs[latestDt][loadedPdfs[latestDt].length - 1].id);
       }
     } else {
       setSelectedDate(new Date().toISOString().split('T')[0]);
@@ -320,8 +394,15 @@ export default function App() {
   const handleSignIn = async (e) => {
     e.preventDefault();
     setAuthError('');
-    setIsAuthLoading(true);
+    setLoginTouched({ email: true, password: true });
 
+    const errs = validateSignInFields(loginEmail, loginPassword);
+    if (Object.keys(errs).length > 0) {
+      setAuthError(Object.values(errs)[0]);
+      return;
+    }
+
+    setIsAuthLoading(true);
     const emailTrimmed = loginEmail.trim().toLowerCase();
 
     try {
@@ -331,13 +412,14 @@ export default function App() {
         await loadWorkspaceData(DEMO_ACCOUNT);
         setLoginEmail('');
         setLoginPassword('');
+        setLoginTouched({});
         return;
       }
 
       if (isFirebaseConfigured && auth) {
         const cred = await signInWithEmailAndPassword(auth, emailTrimmed, loginPassword);
         const fbUser = cred.user;
-        let userObj = {
+        const userObj = {
           uid: fbUser.uid,
           name: fbUser.displayName || emailTrimmed.split('@')[0],
           clientCode: 'BR8576',
@@ -351,6 +433,7 @@ export default function App() {
         await loadWorkspaceData(userObj);
         setLoginEmail('');
         setLoginPassword('');
+        setLoginTouched({});
         return;
       }
 
@@ -369,6 +452,7 @@ export default function App() {
       await loadWorkspaceData(matchedUser);
       setLoginEmail('');
       setLoginPassword('');
+      setLoginTouched({});
     } catch (err) {
       setAuthError(err.message || 'লগইন ব্যর্থ হয়েছে। ইমেইল ও পাসওয়ার্ড যাচাই করুন।');
     } finally {
@@ -379,13 +463,28 @@ export default function App() {
   const handleSignUp = async (e) => {
     e.preventDefault();
     setAuthError('');
-    setIsAuthLoading(true);
+    setSignupTouched({
+      name: true,
+      clientCode: true,
+      boId: true,
+      email: true,
+      password: true
+    });
 
-    if (!signupName.trim() || !signupEmail.trim() || !signupPassword.trim()) {
-      setAuthError('অনুগ্রহ করে নাম, ইমেইল এবং পাসওয়ার্ড পূরণ করুন।');
-      setIsAuthLoading(false);
+    const errs = validateSignUpFields({
+      name: signupName,
+      clientCode: signupClientCode,
+      boId: signupBoId,
+      email: signupEmail,
+      password: signupPassword
+    });
+
+    if (Object.keys(errs).length > 0) {
+      setAuthError(Object.values(errs)[0]);
       return;
     }
+
+    setIsAuthLoading(true);
 
     try {
       let newUser;
@@ -395,10 +494,10 @@ export default function App() {
         newUser = {
           uid: cred.user.uid,
           name: signupName.trim(),
-          clientCode: signupClientCode.trim() || 'BR8576',
-          boId: signupBoId.trim() || '1201820078119171',
+          clientCode: signupClientCode.trim().toUpperCase(),
+          boId: signupBoId.trim(),
           brokerage: signupBrokerage,
-          email: signupEmail.trim(),
+          email: signupEmail.trim().toLowerCase(),
           depositAmount: 0
         };
       } else {
@@ -411,10 +510,10 @@ export default function App() {
         newUser = {
           uid: 'user-' + Date.now(),
           name: signupName.trim(),
-          clientCode: signupClientCode.trim() || 'C' + Math.floor(10000 + Math.random() * 90000),
-          boId: signupBoId.trim() || '1201820000000000',
+          clientCode: signupClientCode.trim().toUpperCase(),
+          boId: signupBoId.trim(),
           brokerage: signupBrokerage,
-          email: signupEmail.trim(),
+          email: signupEmail.trim().toLowerCase(),
           password: signupPassword,
           depositAmount: 0
         };
@@ -436,6 +535,7 @@ export default function App() {
       setSignupBoId('');
       setSignupEmail('');
       setSignupPassword('');
+      setSignupTouched({});
     } catch (err) {
       setAuthError(err.message || 'অ্যাকাউন্ট তৈরি করতে সমস্যা হয়েছে।');
     } finally {
@@ -447,7 +547,7 @@ export default function App() {
     if (isFirebaseConfigured && auth) {
       try {
         await signOut(auth);
-      } catch {}
+      } catch { }
     }
     localStorage.removeItem(STORAGE_SESSION_KEY);
     setCurrentUser(null);
@@ -457,6 +557,8 @@ export default function App() {
     setAuthMode('signin');
     setLoginEmail('');
     setLoginPassword('');
+    setLoginTouched({});
+    setSignupTouched({});
     setAuthError('');
     setUploadStatus(null);
     setShowLeftPdf(false);
@@ -480,8 +582,6 @@ export default function App() {
     let importedCount = 0;
     let duplicateFiles = [];
     let errorMessages = [];
-    let latestDetectedDate = selectedDate;
-    let latestAddedPdfId = selectedPdfId;
 
     try {
       for (const file of files) {
@@ -498,12 +598,8 @@ export default function App() {
           }
 
           workingHashes.push(result.fileHash, result.docFingerprint);
-          latestDetectedDate = result.detectedDate || latestDetectedDate;
 
           if (result.docType === 'PORTFOLIO_STATEMENT') {
-            for (const h of result.holdings) {
-              workingMarketPrices[h.instrument] = h.marketPrice;
-            }
             workingSnapshots[result.detectedDate] = {
               date: result.detectedDate,
               holdings: result.holdings,
@@ -513,10 +609,6 @@ export default function App() {
               statementUnrealized: result.statementUnrealized,
               statementNetGain: result.statementNetGain
             };
-            // Always update deposit amount strictly from the PDF statement
-            if (result.totalDeposit > 0) {
-              updatedUser.depositAmount = result.totalDeposit;
-            }
             importedCount += 1;
           } else {
             const existingIds = new Set(workingTrades.map((t) => t.id));
@@ -550,20 +642,56 @@ export default function App() {
             ? workingPdfMap[result.detectedDate]
             : [];
           workingPdfMap[result.detectedDate] = [...existingList, pdfRecord];
-          latestAddedPdfId = pdfId;
         } catch (fileErr) {
           errorMessages.push(fileErr.message);
         }
       }
+
+      // Recompute market prices strictly in chronological order so the LATEST PDF date always wins
+      const sortedSnapshotDates = Object.keys(workingSnapshots).sort();
+      for (const snapDate of sortedSnapshotDates) {
+        const snap = workingSnapshots[snapDate];
+        if (snap && Array.isArray(snap.holdings)) {
+          for (const h of snap.holdings) {
+            workingMarketPrices[h.instrument] = h.marketPrice;
+          }
+        }
+      }
+
+      // Always pick the latest Portfolio Statement date for Total Deposit Amount (never overwrite with older PDF)
+      const latestSnapshotDate =
+        sortedSnapshotDates.length > 0
+          ? sortedSnapshotDates[sortedSnapshotDates.length - 1]
+          : null;
+      if (latestSnapshotDate && workingSnapshots[latestSnapshotDate]?.totalDeposit > 0) {
+        updatedUser.depositAmount = workingSnapshots[latestSnapshotDate].totalDeposit;
+      }
+
+      // Always lock active date to the latest chronological date across all PDFs & trades
+      const allSortedDates = [
+        ...new Set([
+          ...workingTrades.map((t) => t.date),
+          ...Object.keys(workingPdfMap),
+          ...sortedSnapshotDates
+        ])
+      ].sort();
+      const newestOverallDate =
+        allSortedDates.length > 0
+          ? allSortedDates[allSortedDates.length - 1]
+          : selectedDate;
 
       setTrades(workingTrades);
       setMarketPrices(workingMarketPrices);
       setStatementSnapshots(workingSnapshots);
       setImportedHashes(workingHashes);
       setPdfsByDate(workingPdfMap);
-      setSelectedDate(latestDetectedDate);
-      if (latestAddedPdfId) {
-        setSelectedPdfId(latestAddedPdfId);
+
+      if (newestOverallDate) {
+        setSelectedDate(newestOverallDate);
+        const newestPdfs = workingPdfMap[newestOverallDate];
+        if (Array.isArray(newestPdfs) && newestPdfs.length > 0) {
+          setSelectedPdfId(newestPdfs[newestPdfs.length - 1].id);
+        }
       }
 
       if (updatedUser.depositAmount !== currentUser.depositAmount) {
@@ -588,8 +716,14 @@ export default function App() {
         });
       } else {
         const parts = [];
-        if (importedCount > 0) parts.push(`${importedCount}টি নতুন PDF সফলভাবে স্টোর ও ইম্পোর্ট হয়েছে`);
-        if (duplicateFiles.length > 0) parts.push(`${duplicateFiles.length}টি ডুপ্লিকেট PDF (${duplicateFiles.join(', ')}) স্কিপ করা হয়েছে`);
+        if (importedCount > 0) {
+          parts.push(
+            `${importedCount}টি নতুন PDF সফলভাবে স্টোর হয়েছে (সর্বশেষ তারিখ: ${newestOverallDate})`
+          );
+        }
+        if (duplicateFiles.length > 0) {
+          parts.push(`${duplicateFiles.length}টি ডুপ্লিকেট PDF স্কিপ করা হয়েছে`);
+        }
         if (errorMessages.length > 0) parts.push(errorMessages.join(' | '));
 
         setUploadStatus({
@@ -605,7 +739,6 @@ export default function App() {
     }
   };
 
-  // All unique dates that have trades, statement snapshots, or uploaded PDFs
   const markedTradeDates = useMemo(() => {
     const set = new Set();
     trades.forEach((t) => {
@@ -620,7 +753,6 @@ export default function App() {
     return Array.from(set).sort();
   }, [trades, pdfsByDate, statementSnapshots]);
 
-  // All PDFs stored for the currently selectedDate
   const pdfsForSelectedDate = useMemo(() => {
     if (selectedDate && Array.isArray(pdfsByDate[selectedDate]) && pdfsByDate[selectedDate].length > 0) {
       return pdfsByDate[selectedDate];
@@ -628,14 +760,12 @@ export default function App() {
     return [];
   }, [selectedDate, pdfsByDate]);
 
-  // All uploaded PDFs across all dates (for fallback selector in viewer)
   const allUploadedPdfs = useMemo(() => {
     return Object.entries(pdfsByDate)
       .sort(([dA], [dB]) => dB.localeCompare(dA))
       .flatMap(([, list]) => (Array.isArray(list) ? list : []));
   }, [pdfsByDate]);
 
-  // Currently active PDF inside the viewer (respects user toggle; never auto-opens when selecting a date!)
   const activePdfToDisplay = useMemo(() => {
     const pool = pdfsForSelectedDate.length > 0 ? pdfsForSelectedDate : allUploadedPdfs;
     if (pool.length === 0) return null;
@@ -645,18 +775,21 @@ export default function App() {
 
   const hasAnyUploadedPdf = allUploadedPdfs.length > 0;
 
-  // Latest Portfolio Statement snapshot (for exact brokerage-reconciled cost, unrealized, realized, and net gain/loss)
+  // ALWAYS use the latest chronological Portfolio Statement snapshot so older PDFs never override latest KPIs
   const latestStatementSnapshot = useMemo(() => {
     const dates = Object.keys(statementSnapshots).sort();
     if (dates.length === 0) return null;
-    if (selectedDate && statementSnapshots[selectedDate]) {
-      return statementSnapshots[selectedDate];
-    }
     return statementSnapshots[dates[dates.length - 1]];
-  }, [statementSnapshots, selectedDate]);
+  }, [statementSnapshots]);
 
-  // Accurate per-share calculation with 0.40% (40 paisa per 100 Tk) commission on BUY and SELL
-  // Reconciles directly with Portfolio Statement figures when available!
+  const effectiveDepositAmount = useMemo(() => {
+    if (latestStatementSnapshot && latestStatementSnapshot.totalDeposit > 0) {
+      return latestStatementSnapshot.totalDeposit;
+    }
+    return Number(currentUser?.depositAmount || 0);
+  }, [latestStatementSnapshot, currentUser]);
+
+  // Exact per-share calculation including BOTH Buying Commission (0.40%) and Selling Commission (0.40%)
   const fullShareHoldings = useMemo(() => {
     const map = {};
     const chronological = [...trades].sort((a, b) => a.date.localeCompare(b.date));
@@ -670,8 +803,12 @@ export default function App() {
           totalBoughtQty: 0,
           totalSoldQty: 0,
           remainingQty: 0,
+          totalBuyGross: 0,
           totalBuyCost: 0,
+          totalSellGross: 0,
           totalSellNetProceeds: 0,
+          buyCommission: 0,
+          sellCommission: 0,
           totalCommission: 0,
           latestMarketPrice: marketPrices[sym] || tr.buyPrice || tr.sellPrice,
           buyDates: [],
@@ -688,11 +825,15 @@ export default function App() {
       if (tr.type === 'BUY') {
         const buyRate = Number(tr.buyPrice);
         const gross = qty * buyRate;
-        // Exact 40 paisa per 100 Tk (0.40%) commission if not explicitly parsed
-        const comm = Number(tr.commission) > 0 ? Number(tr.commission) : Number((gross * COMM_RATE).toFixed(2));
+        const comm =
+          Number(tr.commission) > 0
+            ? Number(tr.commission)
+            : Number((gross * COMM_RATE).toFixed(2));
+        item.buyCommission += comm;
         item.totalCommission += comm;
         item.totalBoughtQty += qty;
         item.remainingQty += qty;
+        item.totalBuyGross += gross;
         item.totalBuyCost += gross + comm;
         item.latestMarketPrice = marketPrices[sym] || buyRate;
         if (!item.buyDates.includes(tr.date)) {
@@ -702,20 +843,27 @@ export default function App() {
       } else if (tr.type === 'SELL') {
         const sellRate = Number(tr.sellPrice);
         const gross = qty * sellRate;
-        // Exact 40 paisa per 100 Tk (0.40%) commission deducted on SELL
-        const comm = Number(tr.commission) > 0 ? Number(tr.commission) : Number((gross * COMM_RATE).toFixed(2));
+        const comm =
+          Number(tr.commission) > 0
+            ? Number(tr.commission)
+            : Number((gross * COMM_RATE).toFixed(2));
+        item.sellCommission += comm;
         item.totalCommission += comm;
 
-        const avgBuyCostPerShare =
-          item.totalBoughtQty > 0 ? item.totalBuyCost / item.totalBoughtQty : Number(tr.buyPrice || sellRate);
+        const avgBuyCostPerShareWithComm =
+          item.totalBoughtQty > 0
+            ? item.totalBuyCost / item.totalBoughtQty
+            : Number(tr.buyPrice || sellRate) * (1 + COMM_RATE);
         const sellNetProceeds = gross - comm;
-        const costOfSoldShares = qty * avgBuyCostPerShare;
+        const costOfSoldSharesWithComm = qty * avgBuyCostPerShareWithComm;
 
         item.totalSoldQty += qty;
         item.remainingQty = Math.max(0, item.remainingQty - qty);
+        item.totalSellGross += gross;
         item.totalSellNetProceeds += sellNetProceeds;
-        item.realizedProfit += sellNetProceeds - costOfSoldShares;
-        item.latestMarketPrice = marketPrices[sym] || sellRate;
+        item.realizedProfit += sellNetProceeds - costOfSoldSharesWithComm;
+        item.latestMarketPrice =
+          item.remainingQty === 0 ? sellRate : marketPrices[sym] || sellRate;
 
         if (!item.sellDates.includes(tr.date)) {
           item.sellDates.push(tr.date);
@@ -724,28 +872,40 @@ export default function App() {
       }
     }
 
-    // Merge / reconcile with Portfolio Statement holdings (which already include exact 0.40% brokerage commission)
+    // Reconcile with the LATEST Portfolio Statement snapshot
     if (latestStatementSnapshot && Array.isArray(latestStatementSnapshot.holdings)) {
+      const snapshotSymbols = new Set(
+        latestStatementSnapshot.holdings.map((h) => h.instrument.toUpperCase())
+      );
+
       for (const h of latestStatementSnapshot.holdings) {
         const sym = h.instrument.toUpperCase();
         if (!map[sym]) {
+          const inferredBuyComm = Number(
+            ((h.totalCostWithComm / (1 + COMM_RATE)) * COMM_RATE).toFixed(2)
+          );
           map[sym] = {
             instrument: sym,
             group: h.group || 'A',
             totalBoughtQty: h.qty,
             totalSoldQty: 0,
             remainingQty: h.qty,
+            totalBuyGross: Number((h.totalCostWithComm - inferredBuyComm).toFixed(2)),
             totalBuyCost: h.totalCostWithComm,
+            totalSellGross: 0,
             totalSellNetProceeds: 0,
-            totalCommission: Number(((h.totalCostWithComm / (1 + COMM_RATE)) * COMM_RATE).toFixed(2)),
+            buyCommission: inferredBuyComm,
+            sellCommission: 0,
+            totalCommission: inferredBuyComm,
             latestMarketPrice: h.marketPrice,
             buyDates: [latestStatementSnapshot.date],
             sellDates: [],
             realizedProfit: 0,
-            historyPoints: [{ date: latestStatementSnapshot.date, price: h.avgCostWithComm, type: 'BUY' }]
+            historyPoints: [
+              { date: latestStatementSnapshot.date, price: h.avgCostWithComm, type: 'BUY' }
+            ]
           };
         } else {
-          // Sync exact brokerage statement figures for active holdings
           map[sym].group = h.group || map[sym].group;
           map[sym].remainingQty = h.qty;
           map[sym].latestMarketPrice = h.marketPrice;
@@ -753,6 +913,13 @@ export default function App() {
           map[sym].statementActiveCost = h.totalCostWithComm;
           map[sym].statementMarketValue = h.marketValue;
           map[sym].statementUnrealized = h.unrealizedGainLoss;
+        }
+      }
+
+      // If a share was completely sold out before the latest portfolio statement, ensure remainingQty = 0
+      for (const [sym, item] of Object.entries(map)) {
+        if (!snapshotSymbols.has(sym) && item.totalSoldQty > 0 && item.totalSoldQty >= item.totalBoughtQty) {
+          item.remainingQty = 0;
         }
       }
     }
@@ -766,6 +933,9 @@ export default function App() {
               ? item.totalBuyCost / item.totalBoughtQty
               : 0;
 
+        const avgSellPrice =
+          item.totalSoldQty > 0 ? item.totalSellGross / item.totalSoldQty : 0;
+
         const activeCost =
           item.statementActiveCost !== undefined
             ? item.statementActiveCost
@@ -776,11 +946,12 @@ export default function App() {
             ? item.statementMarketValue
             : item.remainingQty * item.latestMarketPrice;
 
-        // Unrealized Gain/Loss on active shares (after 0.40% buy commission; and accounting for 0.40% sell commission if sold)
         const unrealizedProfit =
           item.statementUnrealized !== undefined
             ? item.statementUnrealized
-            : activeMarketValue - activeCost;
+            : item.remainingQty > 0
+              ? activeMarketValue - activeCost
+              : 0;
 
         const totalNetProfit = Number((item.realizedProfit + unrealizedProfit).toFixed(2));
         const costDenominator = activeCost > 0 ? activeCost : item.totalBuyCost;
@@ -797,8 +968,12 @@ export default function App() {
         return {
           ...item,
           avgBuyPrice,
+          avgSellPrice,
           activeCost,
           activeMarketValue,
+          buyCommission: Number(item.buyCommission.toFixed(2)),
+          sellCommission: Number(item.sellCommission.toFixed(2)),
+          totalCommission: Number(item.totalCommission.toFixed(2)),
           realizedProfit: Number(item.realizedProfit.toFixed(2)),
           unrealizedProfit: Number(unrealizedProfit.toFixed(2)),
           totalNetProfit,
@@ -811,7 +986,7 @@ export default function App() {
       );
   }, [trades, marketPrices, latestStatementSnapshot, searchQuery]);
 
-  // Portfolio top KPI summary — matches brokerage Portfolio Statement exact totals when available
+  // Top KPI cards strictly bound to the latest PDF statement & chronological trades
   const portfolioSummary = useMemo(() => {
     let totalActiveCost = 0;
     let totalActiveMarketValue = 0;
@@ -826,7 +1001,9 @@ export default function App() {
     }
 
     const totalNetProfit =
-      latestStatementSnapshot && latestStatementSnapshot.statementNetGain !== null && !searchQuery.trim()
+      latestStatementSnapshot &&
+        latestStatementSnapshot.statementNetGain !== null &&
+        !searchQuery.trim()
         ? latestStatementSnapshot.statementNetGain
         : Number((computedRealized + computedUnrealized).toFixed(2));
 
@@ -849,8 +1026,15 @@ export default function App() {
     });
   }, [trades, selectedDate, searchQuery]);
 
+  // Anchor reference date to the latest trade/statement date (or today) so 1M / 1Y filters accurately match uploaded PDFs
+  const summaryAnchorDate = useMemo(() => {
+    if (markedTradeDates.length > 0) {
+      return new Date(markedTradeDates[markedTradeDates.length - 1]);
+    }
+    return new Date();
+  }, [markedTradeDates]);
+
   const summaryTrades = useMemo(() => {
-    const now = new Date('2026-11-24');
     return trades.filter((tr) => {
       const matchesSearch = tr.instrument
         .toLowerCase()
@@ -864,12 +1048,97 @@ export default function App() {
       }
 
       const tradeDateObj = new Date(tr.date);
-      const diffDays = (now - tradeDateObj) / (1000 * 60 * 60 * 24);
-      if (summaryFilter === '1M') return diffDays <= 31;
-      if (summaryFilter === '1Y') return diffDays <= 366;
+      const diffDays = (summaryAnchorDate - tradeDateObj) / (1000 * 60 * 60 * 24);
+      if (summaryFilter === '1M') return diffDays >= 0 && diffDays <= 31;
+      if (summaryFilter === '1Y') return diffDays >= 0 && diffDays <= 366;
       return true;
     });
-  }, [trades, searchQuery, summaryFilter, customStartDate, customEndDate]);
+  }, [trades, searchQuery, summaryFilter, customStartDate, customEndDate, summaryAnchorDate]);
+
+  // Share-wise summary inside the selected range (1M, 1Y, or Custom) + Sold Share button filter
+  const summaryShareBreakdown = useMemo(() => {
+    const holdingLookup = {};
+    for (const h of fullShareHoldings) {
+      holdingLookup[h.instrument] = h;
+    }
+
+    const map = {};
+    const sortedRangeTrades = [...summaryTrades].sort((a, b) => a.date.localeCompare(b.date));
+
+    for (const tr of sortedRangeTrades) {
+      const sym = tr.instrument.toUpperCase();
+      if (!map[sym]) {
+        const master = holdingLookup[sym];
+        map[sym] = {
+          instrument: sym,
+          group: tr.group || master?.group || 'A',
+          boughtQty: 0,
+          boughtGross: 0,
+          buyComm: 0,
+          soldQty: 0,
+          soldGross: 0,
+          sellComm: 0,
+          buyDates: [],
+          sellDates: [],
+          overallAvgBuyPrice: master ? master.avgBuyPrice : 0,
+          latestMarketPrice: master ? master.latestMarketPrice : tr.sellPrice || tr.buyPrice
+        };
+      }
+
+      const entry = map[sym];
+      const qty = Number(tr.qty);
+
+      if (tr.type === 'BUY') {
+        const rate = Number(tr.buyPrice);
+        const gross = qty * rate;
+        const comm = Number(tr.commission) > 0 ? Number(tr.commission) : gross * COMM_RATE;
+        entry.boughtQty += qty;
+        entry.boughtGross += gross;
+        entry.buyComm += comm;
+        if (!entry.buyDates.includes(tr.date)) entry.buyDates.push(tr.date);
+      } else if (tr.type === 'SELL') {
+        const rate = Number(tr.sellPrice);
+        const gross = qty * rate;
+        const comm = Number(tr.commission) > 0 ? Number(tr.commission) : gross * COMM_RATE;
+        entry.soldQty += qty;
+        entry.soldGross += gross;
+        entry.sellComm += comm;
+        if (!entry.sellDates.includes(tr.date)) entry.sellDates.push(tr.date);
+      }
+    }
+
+    return Object.values(map)
+      .map((item) => {
+        const rangeAvgBuyPrice =
+          item.boughtQty > 0
+            ? (item.boughtGross + item.buyComm) / item.boughtQty
+            : item.overallAvgBuyPrice;
+
+        const avgSellPrice =
+          item.soldQty > 0 ? item.soldGross / item.soldQty : 0;
+
+        // Exact realized profit on shares sold during this selected range (after both buy & sell 0.40% commissions)
+        const soldNetProceeds = item.soldGross - item.sellComm;
+        const soldCostBasis = item.soldQty * rangeAvgBuyPrice;
+        const realizedNetProfit =
+          item.soldQty > 0 ? Number((soldNetProceeds - soldCostBasis).toFixed(2)) : 0;
+
+        return {
+          ...item,
+          rangeAvgBuyPrice: Number(rangeAvgBuyPrice.toFixed(2)),
+          avgSellPrice: Number(avgSellPrice.toFixed(2)),
+          buyComm: Number(item.buyComm.toFixed(2)),
+          sellComm: Number(item.sellComm.toFixed(2)),
+          totalComm: Number((item.buyComm + item.sellComm).toFixed(2)),
+          realizedNetProfit
+        };
+      })
+      .filter((item) => {
+        if (summaryTradeTypeFilter === 'SOLD') return item.soldQty > 0;
+        if (summaryTradeTypeFilter === 'BUY') return item.boughtQty > 0;
+        return true;
+      });
+  }, [summaryTrades, fullShareHoldings, summaryTradeTypeFilter]);
 
   const summaryStats = useMemo(() => {
     const buys = summaryTrades.filter((t) => t.type === 'BUY');
@@ -908,7 +1177,6 @@ export default function App() {
     return cells;
   }, [calendarMonth]);
 
-  // Clicking a calendar date ONLY switches data & updates the active PDF selection if viewer is open — NEVER auto-opens PDF!
   const handleSelectTradeDate = (dateStr) => {
     setSelectedDate(dateStr);
     setActiveTab('perday');
@@ -920,6 +1188,17 @@ export default function App() {
   };
 
   if (!currentUser) {
+    const showLoginEmailErr = loginTouched.email && loginValidationErrors.email;
+    const showLoginPassErr = loginTouched.password && loginValidationErrors.password;
+
+    const showSignupNameErr = signupTouched.name && signupValidationErrors.name;
+    const showSignupCodeErr = signupTouched.clientCode && signupValidationErrors.clientCode;
+    const showSignupBoErr =
+      (signupTouched.boId || signupBoId.length > 0) && signupValidationErrors.boId;
+    const showSignupEmailErr = signupTouched.email && signupValidationErrors.email;
+    const showSignupPassErr =
+      (signupTouched.password || signupPassword.length > 0) && signupValidationErrors.password;
+
     return (
       <div className="min-h-screen w-full bg-slate-100 flex items-center justify-center p-4 md:p-8">
         <div className="w-full max-w-6xl bg-white rounded-3xl shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 border border-slate-200">
@@ -927,7 +1206,7 @@ export default function App() {
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-xs font-medium text-sky-200 mb-6">
                 <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
-                <span>Vercel Live Cloud & Multi-User DSE Analyzer</span>
+                <span>Multi-User DSE Analyzer</span>
               </div>
 
               <h1 className="text-3xl md:text-4xl font-bold leading-tight mb-4">
@@ -936,12 +1215,12 @@ export default function App() {
               </h1>
 
               <p className="text-slate-300 text-sm leading-relaxed mb-8">
-                প্রতিটি ইউজারের জন্য সম্পূর্ণ আলাদা ও সুরক্ষিত ওয়ার্কস্পেস। যেকোনো ব্রোকারেজ হাউজের ডেইলি Portfolio Statement এবং Trade Confirmation PDF আপলোড করলেই 0.40% কমিশনসহ অটোমেটিক লাভ (Green Signal) ও লস (Red Signal) হিসাব হয়ে যাবে।
+                প্রতিটি ইউজারের জন্য সম্পূর্ণ আলাদা ও সুরক্ষিত ওয়ার্কস্পেস। যেকোনো ব্রোকারেজ হাউজের ডেইলি Portfolio Statement এবং Trade Confirmation PDF আপলোড করলেই কমিশনসহ অটোমেটিক লাভ (Green Signal) ও লস (Red Signal) হিসাব হয়ে যাবে।
               </p>
 
               <div className="mb-8">
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
-                  সমর্থিত ব্রোকারেজ হাউজসমূহ (DSE & CSE):
+                  সমর্থিত ব্রোকারেজ হাউজসমূহ (DSE &amp; CSE):
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {[
@@ -987,7 +1266,7 @@ export default function App() {
           </div>
 
           <div className="lg:col-span-6 p-8 md:p-10 flex flex-col justify-center bg-white">
-            <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-xl mb-8">
+            <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-xl mb-6">
               <button
                 type="button"
                 onClick={() => {
@@ -995,8 +1274,8 @@ export default function App() {
                   setAuthError('');
                 }}
                 className={`py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${authMode === 'signin'
-                  ? 'bg-white text-[#0B2B4C] shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-[#0B2B4C] shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                   }`}
               >
                 লগইন (Sign In)
@@ -1008,8 +1287,8 @@ export default function App() {
                   setAuthError('');
                 }}
                 className={`py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${authMode === 'signup'
-                  ? 'bg-white text-[#0B2B4C] shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-[#0B2B4C] shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                   }`}
               >
                 নতুন অ্যাকাউন্ট (Create Account)
@@ -1017,7 +1296,7 @@ export default function App() {
             </div>
 
             {authError && (
-              <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-start gap-2.5">
+              <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-300 text-red-700 text-xs font-semibold flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
                 <span>{authError}</span>
               </div>
@@ -1026,6 +1305,7 @@ export default function App() {
             {authMode === 'signin' ? (
               <form
                 onSubmit={handleSignIn}
+                noValidate
                 method="post"
                 autoComplete="on"
                 className="space-y-5"
@@ -1035,45 +1315,79 @@ export default function App() {
                     htmlFor="signin-email"
                     className="block text-xs font-semibold text-slate-700 mb-2"
                   >
-                    ইমেইল অ্যাড্রেস (Email)
+                    ইমেইল অ্যাড্রেস (Email) <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Mail
+                      className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${showLoginEmailErr ? 'text-red-500' : 'text-slate-400'
+                        }`}
+                    />
                     <input
                       id="signin-email"
                       name="email"
                       type="email"
                       autoComplete="username"
-                      required
                       value={loginEmail}
+                      onBlur={() => setLoginTouched((p) => ({ ...p, email: true }))}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       placeholder="আপনার ইমেইল লিখুন (যেমন: tanvir@lankabangla.demo)"
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B2B4C] focus:bg-white transition-all"
+                      className={`w-full pl-10 pr-4 py-3 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 transition-all ${showLoginEmailErr
+                          ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
+                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                        }`}
                     />
                   </div>
+                  {showLoginEmailErr && (
+                    <p className="mt-1.5 text-xs font-semibold text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{showLoginEmailErr}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="signin-password"
-                    className="block text-xs font-semibold text-slate-700 mb-2"
-                  >
-                    পাসওয়ার্ড (Password)
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label
+                      htmlFor="signin-password"
+                      className="block text-xs font-semibold text-slate-700"
+                    >
+                      পাসওয়ার্ড (Password — কমপক্ষে ৮ অক্ষর) <span className="text-red-500">*</span>
+                    </label>
+                    {loginPassword.length > 0 && (
+                      <span
+                        className={`text-[11px] font-bold ${loginPassword.length < 8 ? 'text-red-600' : 'text-emerald-600'
+                          }`}
+                      >
+                        {loginPassword.length}/8 chars
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Lock
+                      className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${showLoginPassErr ? 'text-red-500' : 'text-slate-400'
+                        }`}
+                    />
                     <input
                       id="signin-password"
                       name="password"
                       type="password"
                       autoComplete="current-password"
-                      required
                       value={loginPassword}
+                      onBlur={() => setLoginTouched((p) => ({ ...p, password: true }))}
                       onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="আপনার পাসওয়ার্ড লিখুন"
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B2B4C] focus:bg-white transition-all"
+                      placeholder="কমপক্ষে ৮ অক্ষরের পাসওয়ার্ড লিখুন"
+                      className={`w-full pl-10 pr-4 py-3 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 transition-all ${showLoginPassErr
+                          ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
+                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                        }`}
                     />
                   </div>
+                  {showLoginPassErr && (
+                    <p className="mt-1.5 text-xs font-semibold text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{showLoginPassErr}</span>
+                    </p>
+                  )}
                 </div>
 
                 <button
@@ -1087,78 +1401,126 @@ export default function App() {
             ) : (
               <form
                 onSubmit={handleSignUp}
+                noValidate
                 method="post"
                 autoComplete="on"
-                className="space-y-4"
+                className="space-y-3.5"
               >
                 <div>
                   <label
                     htmlFor="signup-name"
-                    className="block text-xs font-semibold text-slate-700 mb-1.5"
+                    className="block text-xs font-semibold text-slate-700 mb-1"
                   >
-                    বিনিয়োগকারীর নাম (Investor Name)
+                    বিনিয়োগকারীর নাম (Investor Name) <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <User
+                      className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${showSignupNameErr ? 'text-red-500' : 'text-slate-400'
+                        }`}
+                    />
                     <input
                       id="signup-name"
                       name="name"
                       type="text"
                       autoComplete="name"
-                      required
                       value={signupName}
+                      onBlur={() => setSignupTouched((p) => ({ ...p, name: true }))}
                       onChange={(e) => setSignupName(e.target.value)}
                       placeholder="যেমন: MD. RAHIM UDDIN"
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B2B4C] focus:bg-white"
+                      className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 ${showSignupNameErr
+                          ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
+                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                        }`}
                     />
                   </div>
+                  {showSignupNameErr && (
+                    <p className="mt-1 text-[11px] font-semibold text-red-600">
+                      {showSignupNameErr}
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label
                       htmlFor="signup-code"
-                      className="block text-xs font-semibold text-slate-700 mb-1.5"
+                      className="block text-xs font-semibold text-slate-700 mb-1"
                     >
-                      Investor / Client Code
+                      Investor / Client Code <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <Hash className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <Hash
+                        className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${showSignupCodeErr ? 'text-red-500' : 'text-slate-400'
+                          }`}
+                      />
                       <input
                         id="signup-code"
                         name="clientCode"
                         type="text"
                         value={signupClientCode}
+                        onBlur={() => setSignupTouched((p) => ({ ...p, clientCode: true }))}
                         onChange={(e) => setSignupClientCode(e.target.value)}
                         placeholder="যেমন: L84419"
-                        className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B2B4C] focus:bg-white"
+                        className={`w-full pl-9 pr-3 py-2.5 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 ${showSignupCodeErr
+                            ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
+                            : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                          }`}
                       />
                     </div>
+                    {showSignupCodeErr && (
+                      <p className="mt-1 text-[11px] font-semibold text-red-600">
+                        {showSignupCodeErr}
+                      </p>
+                    )}
                   </div>
+
                   <div>
-                    <label
-                      htmlFor="signup-bo"
-                      className="block text-xs font-semibold text-slate-700 mb-1.5"
-                    >
-                      BO ID (১৬ ডিজিট)
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label
+                        htmlFor="signup-bo"
+                        className="block text-xs font-semibold text-slate-700"
+                      >
+                        BO ID (১৬ ডিজিট) <span className="text-red-500">*</span>
+                      </label>
+                      {signupBoId.length > 0 && (
+                        <span
+                          className={`text-[11px] font-bold ${signupBoId.length !== 16 ? 'text-red-600' : 'text-emerald-600'
+                            }`}
+                        >
+                          {signupBoId.length}/16
+                        </span>
+                      )}
+                    </div>
                     <input
                       id="signup-bo"
                       name="boId"
                       type="text"
+                      inputMode="numeric"
                       maxLength={16}
                       value={signupBoId}
-                      onChange={(e) => setSignupBoId(e.target.value)}
+                      onBlur={() => setSignupTouched((p) => ({ ...p, boId: true }))}
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 16);
+                        setSignupBoId(digitsOnly);
+                      }}
                       placeholder="12018200..."
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B2B4C] focus:bg-white"
+                      className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 ${showSignupBoErr
+                          ? 'bg-red-50/60 border-2 border-red-500 text-red-700 focus:ring-red-500'
+                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                        }`}
                     />
+                    {showSignupBoErr && (
+                      <p className="mt-1 text-[11px] font-semibold text-red-600">
+                        {showSignupBoErr}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 <div>
                   <label
                     htmlFor="signup-broker"
-                    className="block text-xs font-semibold text-slate-700 mb-1.5"
+                    className="block text-xs font-semibold text-slate-700 mb-1"
                   >
                     প্রাথমিক ব্রোকারেজ হাউজ
                   </label>
@@ -1185,47 +1547,79 @@ export default function App() {
                 <div>
                   <label
                     htmlFor="signup-email"
-                    className="block text-xs font-semibold text-slate-700 mb-1.5"
+                    className="block text-xs font-semibold text-slate-700 mb-1"
                   >
-                    ইমেইল অ্যাড্রেস (Email)
+                    ইমেইল অ্যাড্রেস (Email) <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Mail
+                      className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${showSignupEmailErr ? 'text-red-500' : 'text-slate-400'
+                        }`}
+                    />
                     <input
                       id="signup-email"
                       name="email"
                       type="email"
                       autoComplete="username"
-                      required
                       value={signupEmail}
+                      onBlur={() => setSignupTouched((p) => ({ ...p, email: true }))}
                       onChange={(e) => setSignupEmail(e.target.value)}
-                      placeholder="investor@brokerage.demo"
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B2B4C] focus:bg-white"
+                      placeholder="investor@gmail.com"
+                      className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 ${showSignupEmailErr
+                          ? 'bg-red-50/60 border-2 border-red-500 focus:ring-red-500'
+                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                        }`}
                     />
                   </div>
+                  {showSignupEmailErr && (
+                    <p className="mt-1 text-[11px] font-semibold text-red-600">
+                      {showSignupEmailErr}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="signup-password"
-                    className="block text-xs font-semibold text-slate-700 mb-1.5"
-                  >
-                    পাসওয়ার্ড (Password)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label
+                      htmlFor="signup-password"
+                      className="block text-xs font-semibold text-slate-700"
+                    >
+                      পাসওয়ার্ড (Password) <span className="text-red-500">*</span>
+                    </label>
+                    {signupPassword.length > 0 && (
+                      <span
+                        className={`text-[11px] font-bold ${signupPassword.length < 8 ? 'text-red-600' : 'text-emerald-600'
+                          }`}
+                      >
+                        {signupPassword.length}/8 অক্ষর
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Lock
+                      className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${showSignupPassErr ? 'text-red-500' : 'text-slate-400'
+                        }`}
+                    />
                     <input
                       id="signup-password"
                       name="new-password"
                       type="password"
                       autoComplete="new-password"
-                      required
                       value={signupPassword}
+                      onBlur={() => setSignupTouched((p) => ({ ...p, password: true }))}
                       onChange={(e) => setSignupPassword(e.target.value)}
-                      placeholder="কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড দিন"
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B2B4C] focus:bg-white"
+                      placeholder="কমপক্ষে ৮ অক্ষরের পাসওয়ার্ড দিন"
+                      className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 ${showSignupPassErr
+                          ? 'bg-red-50/60 border-2 border-red-500 text-red-700 focus:ring-red-500'
+                          : 'bg-slate-50 border border-slate-200 focus:ring-[#0B2B4C] focus:bg-white'
+                        }`}
                     />
                   </div>
+                  {showSignupPassErr && (
+                    <p className="mt-1 text-[11px] font-semibold text-red-600">
+                      {showSignupPassErr}
+                    </p>
+                  )}
                 </div>
 
                 <button
@@ -1277,11 +1671,10 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setShowLeftPdf((prev) => !prev)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors ${
-                  showLeftPdf
+                className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors ${showLeftPdf
                     ? 'bg-amber-400 text-[#0B2B4C]'
                     : 'bg-white/10 hover:bg-white/20 text-white'
-                }`}
+                  }`}
               >
                 {showLeftPdf ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 <span>{showLeftPdf ? 'Hide PDF' : 'Show PDF'}</span>
@@ -1311,7 +1704,6 @@ export default function App() {
       </header>
 
       <div className="flex-1 w-full px-4 sm:px-6 lg:px-10 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Responsive Left / Top PDF Drawer — ONLY renders when user explicitly turns Show PDF ON */}
         {showLeftPdf && activePdfToDisplay && (
           <aside className="w-full lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[55vh] sm:h-[65vh] lg:h-[82vh] lg:sticky lg:top-20">
             <div className="px-4 py-3 bg-slate-100 border-b border-slate-200 space-y-2">
@@ -1337,7 +1729,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Multi-PDF Switcher Tabs when multiple PDFs exist on the same date (or across dates) */}
               {(pdfsForSelectedDate.length > 1 || allUploadedPdfs.length > 1) && (
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
                   {(pdfsForSelectedDate.length > 0 ? pdfsForSelectedDate : allUploadedPdfs).map(
@@ -1348,11 +1739,10 @@ export default function App() {
                           key={pdfItem.id}
                           type="button"
                           onClick={() => setSelectedPdfId(pdfItem.id)}
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap flex items-center gap-1 transition-all ${
-                            isCurrent
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap flex items-center gap-1 transition-all ${isCurrent
                               ? 'bg-[#0B2B4C] text-white shadow-sm'
                               : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
-                          }`}
+                            }`}
                         >
                           <FileText className="w-3 h-3 shrink-0" />
                           <span>
@@ -1385,7 +1775,7 @@ export default function App() {
               : 'w-full lg:col-span-12 space-y-6 min-w-0'
           }
         >
-          {/* Top 4 KPI Cards */}
+          {/* Top 4 KPI Cards — Always synced to the LATEST PDF date */}
           <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm min-w-0">
               <p className="text-xs font-medium text-slate-500 mb-1">Active Investor Account</p>
@@ -1396,25 +1786,23 @@ export default function App() {
               </p>
             </div>
 
-            {/* Total Deposit Amount — Read-only from PDF Statement (Edit removed) */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm min-w-0">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs font-medium text-slate-500">Total Deposit Amount</p>
-                <span className="px-2 py-0.5 rounded bg-slate-100 text-[10px] font-semibold text-slate-600">
-                  PDF Verified
+                <span className="px-2 py-0.5 rounded bg-emerald-50 text-[10px] font-semibold text-emerald-700">
+                  {latestStatementSnapshot ? `Latest: ${latestStatementSnapshot.date}` : 'PDF Verified'}
                 </span>
               </div>
               <p className="text-2xl font-bold text-emerald-600">
                 ৳
-                {Number(currentUser.depositAmount || 0).toLocaleString('en-BD', {
+                {effectiveDepositAmount.toLocaleString('en-BD', {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2
                 })}
               </p>
-              <p className="text-xs text-slate-400 mt-1">Auto-synced from Portfolio PDF</p>
+              <p className="text-xs text-slate-400 mt-1">Auto-synced from latest Portfolio PDF</p>
             </div>
 
-            {/* Active Share Buying Cost (Green) & Dynamic Market Value (Green if Profit, Red if Loss) */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm min-w-0">
               <p className="text-xs font-medium text-slate-500 mb-1">Active Share Buying Cost</p>
               <p className="text-2xl font-bold text-emerald-600">
@@ -1427,11 +1815,10 @@ export default function App() {
               <p className="text-xs mt-1 flex items-center gap-1.5 flex-wrap">
                 <span className="text-slate-500">Market Value:</span>
                 <span
-                  className={`font-bold px-2 py-0.5 rounded-md ${
-                    isMarketGain
+                  className={`font-bold px-2 py-0.5 rounded-md ${isMarketGain
                       ? 'bg-emerald-100 text-emerald-700'
                       : 'bg-rose-100 text-rose-700'
-                  }`}
+                    }`}
                 >
                   ৳
                   {portfolioSummary.totalActiveMarketValue.toLocaleString('en-BD', {
@@ -1443,19 +1830,17 @@ export default function App() {
             </div>
 
             <div
-              className={`p-5 rounded-2xl border shadow-sm min-w-0 ${
-                portfolioSummary.totalNetProfit >= 0
+              className={`p-5 rounded-2xl border shadow-sm min-w-0 ${portfolioSummary.totalNetProfit >= 0
                   ? 'bg-emerald-50/70 border-emerald-200'
                   : 'bg-rose-50/70 border-rose-200'
-              }`}
+                }`}
             >
               <p className="text-xs font-medium text-slate-600 mb-1">
                 Total Net Gain / Loss (Realized + Unrealized)
               </p>
               <p
-                className={`text-xl sm:text-2xl font-bold flex items-center gap-1 flex-wrap ${
-                  portfolioSummary.totalNetProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                }`}
+                className={`text-xl sm:text-2xl font-bold flex items-center gap-1 flex-wrap ${portfolioSummary.totalNetProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                  }`}
               >
                 {portfolioSummary.totalNetProfit >= 0 ? (
                   <ArrowUpRight className="w-5 h-5 shrink-0" />
@@ -1473,7 +1858,7 @@ export default function App() {
                 </span>
               </p>
               <p className="text-xs text-slate-500 mt-1">
-                Includes 0.40% brokerage commission • Click share for chart
+                Includes 0.40% Buy &amp; Sell commission • Click share for chart
               </p>
             </div>
           </section>
@@ -1553,20 +1938,18 @@ export default function App() {
                                 ? `Trade Date: ${cell.dateStr}${pdfCount > 0 ? ` (${pdfCount} PDF Stored)` : ''}`
                                 : cell.dateStr
                             }
-                            className={`relative h-9 rounded-lg text-xs font-semibold flex flex-col items-center justify-center transition-all ${
-                              isSelected
+                            className={`relative h-9 rounded-lg text-xs font-semibold flex flex-col items-center justify-center transition-all ${isSelected
                                 ? 'bg-[#0B2B4C] text-white shadow-sm'
                                 : isMarked
                                   ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 hover:bg-emerald-200'
                                   : 'text-slate-600 hover:bg-slate-100'
-                            }`}
+                              }`}
                           >
                             <span>{cell.day}</span>
                             {isMarked && (
                               <span
-                                className={`w-1.5 h-1.5 rounded-full mt-0.5 ${
-                                  isSelected ? 'bg-amber-400' : 'bg-emerald-600'
-                                }`}
+                                className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-amber-400' : 'bg-emerald-600'
+                                  }`}
                               />
                             )}
                           </button>
@@ -1617,7 +2000,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Stored PDFs badge bar for selected date when multiple PDFs exist */}
             {pdfsForSelectedDate.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <span className="text-[11px] font-semibold text-slate-500">
@@ -1631,11 +2013,10 @@ export default function App() {
                       setSelectedPdfId(pdfItem.id);
                       setShowLeftPdf(true);
                     }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors ${
-                      activePdfToDisplay?.id === pdfItem.id && showLeftPdf
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors ${activePdfToDisplay?.id === pdfItem.id && showLeftPdf
                         ? 'bg-[#0B2B4C] text-white border-[#0B2B4C]'
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
+                      }`}
                   >
                     <FileText className="w-3.5 h-3.5 text-amber-500" />
                     <span>
@@ -1651,17 +2032,16 @@ export default function App() {
               <span>
                 <strong>নির্দেশনা:</strong> শুধুমাত্র ব্রোকারেজ হাউজের{' '}
                 <strong>Trade Confirmation</strong> অথবা <strong>Portfolio Statement PDF</strong>{' '}
-                আপলোড করুন। ট্রেডিং তথ্য ছাড়া অন্য কোনো সাধারণ PDF ফাইল সিস্টেম গ্রহণ করবে না।
+                আপলোড করুন। একাধিক PDF আপলোড করলে সব ডাটা সংরক্ষিত থাকবে এবং ড্যাশবোর্ডে সর্বশেষ তারিখের PDF ডাটা অটোমেটিক দেখাবে।
               </span>
             </div>
 
             {uploadStatus && (
               <div
-                className={`p-3.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-3 transition-opacity duration-300 ${
-                  uploadStatus.type === 'error'
+                className={`p-3.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-3 transition-opacity duration-300 ${uploadStatus.type === 'error'
                     ? 'bg-rose-50 border-rose-200 text-rose-800'
                     : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   {uploadStatus.type === 'error' ? (
@@ -1687,24 +2067,22 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('full')}
-              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                activeTab === 'full'
+              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${activeTab === 'full'
                   ? 'bg-[#0B2B4C] text-white shadow-sm'
                   : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-              }`}
+                }`}
             >
               <Layers className="w-4 h-4 shrink-0" />
-              <span>Full Share Information (All Holdings & Sold History)</span>
+              <span>Full Share Information (All Holdings &amp; Sold History)</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('perday')}
-              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                activeTab === 'perday'
+              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${activeTab === 'perday'
                   ? 'bg-[#0B2B4C] text-white shadow-sm'
                   : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-              }`}
+                }`}
             >
               <RefreshCw className="w-4 h-4 shrink-0" />
               <span>Per-Day Trading ({selectedDate || 'Select Date'})</span>
@@ -1713,14 +2091,13 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('summary')}
-              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                activeTab === 'summary'
+              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${activeTab === 'summary'
                   ? 'bg-[#0B2B4C] text-white shadow-sm'
                   : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-              }`}
+                }`}
             >
               <Filter className="w-4 h-4 shrink-0" />
-              <span>Buying & Selling Summary</span>
+              <span>Buying &amp; Selling Summary</span>
             </button>
           </div>
 
@@ -1730,14 +2107,14 @@ export default function App() {
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <FileText className="w-5 h-5 text-amber-500 shrink-0" />
                   <h2 className="font-bold text-slate-900 text-sm sm:text-base">
-                    Full Share Information (All Bought, Active & Sold Shares)
+                    Full Share Information (All Bought, Active &amp; Sold Shares)
                   </h2>
                   <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">
                     {fullShareHoldings.length} Companies
                   </span>
                 </div>
                 <p className="text-xs text-slate-500">
-                  ০.৪০% কমিশন সমন্বয়কৃত লাভ-লস এবং Details Graph দেখতে যেকোনো শেয়ারে ক্লিক করুন
+                  Buy + Sell ০.৪০% কমিশন সমন্বয়কৃত লাভ-লস এবং Details Graph দেখতে শেয়ারে ক্লিক করুন
                 </p>
               </div>
 
@@ -1745,7 +2122,7 @@ export default function App() {
                 <table className="w-full text-left border-collapse min-w-[780px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-600">
-                      <th className="py-3.5 px-4">Company & Status</th>
+                      <th className="py-3.5 px-4">Company &amp; Status</th>
                       <th className="py-3.5 px-3">Gr</th>
                       <th className="py-3.5 px-3 text-right">Bought / Sold / Bal</th>
                       <th className="py-3.5 px-3">Buy Date(s)</th>
@@ -1778,20 +2155,18 @@ export default function App() {
                             onClick={() =>
                               setSelectedChartSymbol(isSelected ? null : row.instrument)
                             }
-                            className={`transition-colors cursor-pointer ${
-                              isSelected ? 'bg-sky-50/80' : 'hover:bg-slate-50/90'
-                            }`}
+                            className={`transition-colors cursor-pointer ${isSelected ? 'bg-sky-50/80' : 'hover:bg-slate-50/90'
+                              }`}
                           >
                             <td className="py-3.5 px-4">
                               <div className="font-bold text-slate-900">{row.instrument}</div>
                               <span
-                                className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  row.status === 'SOLD OUT'
+                                className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold ${row.status === 'SOLD OUT'
                                     ? 'bg-purple-100 text-purple-700'
                                     : row.status === 'PARTIAL SOLD'
                                       ? 'bg-amber-100 text-amber-800'
                                       : 'bg-sky-100 text-sky-700'
-                                }`}
+                                  }`}
                               >
                                 {row.status}
                               </span>
@@ -1882,11 +2257,10 @@ export default function App() {
                                   e.stopPropagation();
                                   setSelectedChartSymbol(isSelected ? null : row.instrument);
                                 }}
-                                className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${
-                                  isSelected
+                                className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${isSelected
                                     ? 'bg-[#0B2B4C] text-white border-[#0B2B4C]'
                                     : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                }`}
+                                  }`}
                               >
                                 {isSelected ? 'Close' : 'Graph'}
                               </button>
@@ -1965,11 +2339,10 @@ export default function App() {
                             </td>
                             <td className="py-3.5 px-3">
                               <span
-                                className={`px-2.5 py-1 rounded-md text-xs font-bold ${
-                                  tr.type === 'BUY'
+                                className={`px-2.5 py-1 rounded-md text-xs font-bold ${tr.type === 'BUY'
                                     ? 'bg-blue-100 text-blue-700'
                                     : 'bg-purple-100 text-purple-700'
-                                }`}
+                                  }`}
                               >
                                 {tr.type}
                               </span>
@@ -1990,11 +2363,10 @@ export default function App() {
                             </td>
                             <td className="py-3.5 px-4 text-right">
                               <span
-                                className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                                  pnl >= 0
+                                className={`px-2.5 py-1 rounded-full text-xs font-bold ${pnl >= 0
                                     ? 'bg-emerald-100 text-emerald-800'
                                     : 'bg-rose-100 text-rose-800'
-                                }`}
+                                  }`}
                               >
                                 {pnl >= 0
                                   ? `+৳${pnl.toFixed(2)}`
@@ -2016,10 +2388,10 @@ export default function App() {
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h2 className="font-bold text-slate-900 text-base">
-                    Buying & Selling Volume Summary
+                    Buying &amp; Selling Volume Summary
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Filter your buy & sell history by 1 Month, 1 Year, or Custom Date Range
+                    Filter your buy &amp; sell history by Last 1 Month, Last 1 Year, Custom Date Range, or Sold Shares
                   </p>
                 </div>
 
@@ -2033,11 +2405,10 @@ export default function App() {
                       key={btn.id}
                       type="button"
                       onClick={() => setSummaryFilter(btn.id)}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                        summaryFilter === btn.id
+                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${summaryFilter === btn.id
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
+                        }`}
                     >
                       {btn.label}
                     </button>
@@ -2099,6 +2470,136 @@ export default function App() {
                   <p className="text-xs text-amber-800 mt-1">
                     {summaryTrades.length} Total Orders
                   </p>
+                </div>
+              </div>
+
+              {/* Detailed Share-by-Share Breakdown for Selected Time Range + Sold Share Filter Button */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-4 sm:px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+                      Share-Wise Buying &amp; Selling Breakdown (
+                      {summaryFilter === '1M'
+                        ? 'Last 1 Month'
+                        : summaryFilter === '1Y'
+                          ? 'Last 1 Year'
+                          : 'Custom Range'}
+                      )
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
+                      {summaryShareBreakdown.length} Shares
+                    </span>
+                  </div>
+
+                  {/* Filter Buttons: All Shares | Bought Shares | Sold Shares */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSummaryTradeTypeFilter('ALL')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${summaryTradeTypeFilter === 'ALL'
+                          ? 'bg-[#0B2B4C] text-white shadow-sm'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                    >
+                      All Shares
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSummaryTradeTypeFilter('BUY')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${summaryTradeTypeFilter === 'BUY'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                        }`}
+                    >
+                      Bought Shares
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSummaryTradeTypeFilter('SOLD')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${summaryTradeTypeFilter === 'SOLD'
+                          ? 'bg-purple-600 text-white shadow-sm'
+                          : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                        }`}
+                    >
+                      Sold Shares
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[820px]">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                        <th className="py-3.5 px-4">Share Name</th>
+                        <th className="py-3.5 px-3">Gr</th>
+                        <th className="py-3.5 px-3 text-right">Bought Qty</th>
+                        <th className="py-3.5 px-3 text-right">Avg Buy (+0.4%)</th>
+                        <th className="py-3.5 px-3">Buy Date(s)</th>
+                        <th className="py-3.5 px-3 text-right">Sold Qty</th>
+                        <th className="py-3.5 px-3 text-right">Sell Price</th>
+                        <th className="py-3.5 px-3">Sold Date(s)</th>
+                        <th className="py-3.5 px-3 text-right">Total Comm</th>
+                        <th className="py-3.5 px-4 text-right">Sold Net Profit / Loss</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm">
+                      {summaryShareBreakdown.length === 0 ? (
+                        <tr>
+                          <td colSpan={10} className="py-12 text-center text-slate-400 text-sm">
+                            নির্বাচিত সময়সীমায় কোনো {summaryTradeTypeFilter === 'SOLD' ? 'বিক্রিত (Sold)' : ''} শেয়ার পাওয়া যায়নি।
+                          </td>
+                        </tr>
+                      ) : (
+                        summaryShareBreakdown.map((item) => (
+                          <tr key={item.instrument} className="hover:bg-slate-50">
+                            <td className="py-3.5 px-4 font-bold text-slate-900">
+                              {item.instrument}
+                            </td>
+                            <td className="py-3.5 px-3 text-slate-600">{item.group}</td>
+                            <td className="py-3.5 px-3 text-right font-mono font-semibold text-blue-700">
+                              {item.boughtQty > 0 ? item.boughtQty : '—'}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-semibold text-blue-700">
+                              {item.rangeAvgBuyPrice > 0
+                                ? `৳${item.rangeAvgBuyPrice.toFixed(2)}`
+                                : '—'}
+                            </td>
+                            <td className="py-3.5 px-3 text-xs font-mono text-slate-600">
+                              {item.buyDates.length > 0 ? item.buyDates.join(', ') : '—'}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono font-semibold text-purple-700">
+                              {item.soldQty > 0 ? item.soldQty : '—'}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-semibold text-slate-800">
+                              {item.soldQty > 0 ? `৳${item.avgSellPrice.toFixed(2)}` : '—'}
+                            </td>
+                            <td className="py-3.5 px-3 text-xs font-mono text-purple-700">
+                              {item.sellDates.length > 0 ? item.sellDates.join(', ') : 'Not Sold'}
+                            </td>
+                            <td className="py-3.5 px-3 text-right text-slate-600">
+                              ৳{item.totalComm.toFixed(2)}
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              {item.soldQty > 0 ? (
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${item.realizedNetProfit >= 0
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-rose-100 text-rose-800'
+                                    }`}
+                                >
+                                  {item.realizedNetProfit >= 0
+                                    ? `+৳${item.realizedNetProfit.toFixed(2)}`
+                                    : `-৳${Math.abs(item.realizedNetProfit).toFixed(2)}`}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-400">Holding</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </section>

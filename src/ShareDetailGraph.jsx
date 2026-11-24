@@ -41,13 +41,16 @@ export default function ShareDetailGraph({ shareRow, onClose }) {
             : [
                 {
                     date: shareRow.buyDates?.[0] || 'Buy',
-                    price: Number(shareRow.avgBuyPrice) || 10,
+                    price: Number(shareRow.rawAvgBuyPrice || shareRow.avgBuyPrice) || 10,
                     type: 'BUY'
                 },
                 {
-                    date: 'Current Mkt',
-                    price: Number(shareRow.latestMarketPrice) || Number(shareRow.avgBuyPrice) || 12,
-                    type: isProfit ? 'PROFIT' : 'LOSS'
+                    date: shareRow.sellDates?.[0] || 'Current Mkt',
+                    price:
+                        Number(shareRow.avgSellPrice || shareRow.latestMarketPrice) ||
+                        Number(shareRow.avgBuyPrice) ||
+                        12,
+                    type: shareRow.totalSoldQty > 0 ? 'SELL' : isProfit ? 'PROFIT' : 'LOSS'
                 }
             ];
 
@@ -94,6 +97,10 @@ export default function ShareDetailGraph({ shareRow, onClose }) {
         return { val, y };
     });
 
+    const buyComm = Number(shareRow.buyCommission || 0);
+    const sellComm = Number(shareRow.sellCommission || 0);
+    const totalComm = Number(shareRow.totalCommission || buyComm + sellComm);
+
     return (
         <div
             className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
@@ -107,8 +114,8 @@ export default function ShareDetailGraph({ shareRow, onClose }) {
                     <div className="flex items-center gap-3">
                         <div
                             className={`w-10 h-10 rounded-xl flex items-center justify-center ${isProfit
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : 'bg-rose-100 text-rose-700'
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'bg-rose-100 text-rose-700'
                                 }`}
                         >
                             {isProfit ? (
@@ -120,21 +127,23 @@ export default function ShareDetailGraph({ shareRow, onClose }) {
                         <div>
                             <div className="flex items-center gap-2">
                                 <h3 className="text-base font-bold text-slate-900">
-                                    {shareRow.instrument} — Price & Profit/Loss Details Graph
+                                    {shareRow.instrument} — Price &amp; Commission Profit/Loss Graph
                                 </h3>
                                 <span
                                     className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${isProfit
-                                        ? 'bg-emerald-100 text-emerald-800'
-                                        : 'bg-rose-100 text-rose-800'
+                                            ? 'bg-emerald-100 text-emerald-800'
+                                            : 'bg-rose-100 text-rose-800'
                                         }`}
                                 >
                                     {isProfit ? 'PROFIT (লাভ)' : 'LOSS (লস)'}
                                 </span>
                             </div>
                             <p className="text-xs text-slate-500">
-                                Group {shareRow.group} • Status: {shareRow.status} • Avg Buy: ৳
-                                {shareRow.avgBuyPrice.toFixed(2)} vs Current/Sell: ৳
-                                {shareRow.latestMarketPrice.toFixed(2)}
+                                Group {shareRow.group} • Status: {shareRow.status} • Avg Buy (incl. 0.4%): ৳
+                                {shareRow.avgBuyPrice.toFixed(2)} vs{' '}
+                                {shareRow.totalSoldQty > 0 && shareRow.remainingQty === 0
+                                    ? `Sold Price: ৳${Number(shareRow.avgSellPrice || shareRow.latestMarketPrice).toFixed(2)}`
+                                    : `Current/Sell: ৳${shareRow.latestMarketPrice.toFixed(2)}`}
                             </p>
                         </div>
                     </div>
@@ -150,7 +159,7 @@ export default function ShareDetailGraph({ shareRow, onClose }) {
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-stretch">
-                    <div className="xl:col-span-8 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                    <div className="xl:col-span-7 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-2 text-xs text-slate-500">
                             <span className="font-semibold text-slate-700 flex items-center gap-1.5">
                                 <BarChart3 className="w-4 h-4 text-[#0B2B4C]" />
@@ -166,7 +175,7 @@ export default function ShareDetailGraph({ shareRow, onClose }) {
                                 </span>
                                 <span className="inline-flex items-center gap-1.5">
                                     <span className="w-3 h-0.5 border-t border-dashed border-amber-500 inline-block" />
-                                    <span>Avg Buy (৳{shareRow.avgBuyPrice.toFixed(2)})</span>
+                                    <span>Avg Buy (+0.4%): ৳{shareRow.avgBuyPrice.toFixed(2)}</span>
                                 </span>
                             </div>
                         </div>
@@ -174,7 +183,7 @@ export default function ShareDetailGraph({ shareRow, onClose }) {
                         <div className="w-full overflow-x-auto">
                             <svg
                                 viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-                                className="w-full h-auto min-w-[460px]"
+                                className="w-full h-auto min-w-[440px]"
                                 role="img"
                                 aria-label={`${shareRow.instrument} price trend graph`}
                             >
@@ -201,7 +210,7 @@ export default function ShareDetailGraph({ shareRow, onClose }) {
                                             textAnchor="end"
                                             className="fill-slate-400 text-[10px] font-mono"
                                         >
-                                            ৳{tick.val.toFixed(0)}
+                                            ৳{tick.val.toFixed(2)}
                                         </text>
                                     </g>
                                 ))}
@@ -223,7 +232,7 @@ export default function ShareDetailGraph({ shareRow, onClose }) {
                                             textAnchor="end"
                                             className="fill-amber-600 text-[10px] font-semibold"
                                         >
-                                            Avg Buy ৳{shareRow.avgBuyPrice.toFixed(2)}
+                                            Avg Buy (+Comm) ৳{shareRow.avgBuyPrice.toFixed(2)}
                                         </text>
                                     </g>
                                 )}
@@ -278,37 +287,45 @@ export default function ShareDetailGraph({ shareRow, onClose }) {
                         </div>
                     </div>
 
-                    <div className="xl:col-span-4 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col justify-between space-y-3">
+                    <div className="xl:col-span-5 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col justify-between space-y-3">
                         <div>
                             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-                                Profit / Loss & Trade Breakdown
+                                Exact Profit / Loss &amp; Commission Breakdown
                             </h4>
 
-                            <div className="space-y-2.5 text-xs">
+                            <div className="space-y-2 text-xs">
                                 <div
                                     className={`p-3 rounded-xl border flex items-center justify-between ${isProfit
-                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                                        : 'bg-rose-50 border-rose-200 text-rose-900'
+                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                                            : 'bg-rose-50 border-rose-200 text-rose-900'
                                         }`}
                                 >
-                                    <span className="font-semibold">Total Net Gain / Loss</span>
+                                    <span className="font-semibold">Exact Net Gain / Loss (After Comm)</span>
                                     <span className="font-bold text-sm">
                                         {isProfit ? '+' : '-'}৳{Math.abs(shareRow.totalNetProfit).toFixed(2)} (
+                                        {shareRow.profitPct >= 0 ? '+' : ''}
                                         {shareRow.profitPct.toFixed(2)}%)
                                     </span>
                                 </div>
 
                                 <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
-                                    <span className="text-slate-500">Realized Profit (Sold Shares)</span>
-                                    <span className="font-semibold text-slate-800">
-                                        ৳{Number(shareRow.realizedProfit || 0).toFixed(2)}
+                                    <span className="text-slate-500">Realized Profit (Sold Shares Net)</span>
+                                    <span
+                                        className={`font-bold ${Number(shareRow.realizedProfit || 0) >= 0
+                                                ? 'text-emerald-700'
+                                                : 'text-rose-700'
+                                            }`}
+                                    >
+                                        {Number(shareRow.realizedProfit || 0) >= 0 ? '+' : '-'}৳
+                                        {Math.abs(Number(shareRow.realizedProfit || 0)).toFixed(2)}
                                     </span>
                                 </div>
 
                                 <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
-                                    <span className="text-slate-500">Unrealized Gain/Loss (Balance)</span>
+                                    <span className="text-slate-500">Unrealized Gain/Loss (Active Bal)</span>
                                     <span className="font-semibold text-slate-800">
-                                        ৳{Number(shareRow.unrealizedProfit || 0).toFixed(2)}
+                                        {Number(shareRow.unrealizedProfit || 0) >= 0 ? '+' : '-'}৳
+                                        {Math.abs(Number(shareRow.unrealizedProfit || 0)).toFixed(2)}
                                     </span>
                                 </div>
 
@@ -319,14 +336,22 @@ export default function ShareDetailGraph({ shareRow, onClose }) {
                                     </span>
                                 </div>
 
+                                <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
+                                    <span className="text-blue-700 font-medium">Buying Commission (0.40%)</span>
+                                    <span className="font-semibold text-blue-700">৳{buyComm.toFixed(2)}</span>
+                                </div>
+
+                                <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
+                                    <span className="text-purple-700 font-medium">Selling Commission (0.40%)</span>
+                                    <span className="font-semibold text-purple-700">৳{sellComm.toFixed(2)}</span>
+                                </div>
+
                                 <div className="flex items-center justify-between py-1.5">
-                                    <span className="text-slate-500 flex items-center gap-1">
-                                        <DollarSign className="w-3.5 h-3.5 text-slate-400" />
-                                        Total Commission
+                                    <span className="text-slate-700 font-semibold flex items-center gap-1">
+                                        <DollarSign className="w-3.5 h-3.5 text-amber-600" />
+                                        Total Brokerage Commission
                                     </span>
-                                    <span className="font-semibold text-slate-700">
-                                        ৳{Number(shareRow.totalCommission || 0).toFixed(2)}
-                                    </span>
+                                    <span className="font-bold text-slate-900">৳{totalComm.toFixed(2)}</span>
                                 </div>
                             </div>
                         </div>
@@ -334,10 +359,10 @@ export default function ShareDetailGraph({ shareRow, onClose }) {
                         <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex items-center gap-1.5">
                             <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                             <span>
-                                Buy Dates: <strong>{shareRow.buyDates?.join(', ') || '—'}</strong>
+                                Buy Date(s): <strong>{shareRow.buyDates?.join(', ') || '—'}</strong>
                                 {shareRow.sellDates?.length > 0 && (
                                     <>
-                                        {' '}• Sell Dates: <strong>{shareRow.sellDates.join(', ')}</strong>
+                                        {' '}• Sell Date(s): <strong>{shareRow.sellDates.join(', ')}</strong>
                                     </>
                                 )}
                             </span>

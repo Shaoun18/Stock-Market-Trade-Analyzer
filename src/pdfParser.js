@@ -50,7 +50,11 @@ function parseBrokerDate(text) {
 
 function parseNum(str) {
   if (!str) return 0;
-  return parseFloat(String(str).replace(/,/g, '')) || 0;
+  const cleaned = String(str).replace(/,/g, '').trim();
+  if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
+    return -Math.abs(parseFloat(cleaned.slice(1, -1)) || 0);
+  }
+  return parseFloat(cleaned) || 0;
 }
 
 async function computeBufferHash(arrayBuffer) {
@@ -101,11 +105,13 @@ export async function parseAndValidateTradePdf(file) {
     );
   }
 
+  // Normalize split instrument symbols across PDF line breaks
   const cleanedText = fullText
     .replace(/\bDUTCHBANG\s+L\b/g, 'DUTCHBANGL')
     .replace(/\bSQURPHAR\s+MA\b/g, 'SQURPHARMA')
     .replace(/\bNAVANAPHA\s+R\b/g, 'NAVANAPHAR')
     .replace(/\bBDTHAIFOO\s+D\b/g, 'BDTHAIFOOD')
+    .replace(/\bASIAPACIN\s+S\b/g, 'ASIAPACINS')
     .replace(/\s+/g, ' ');
 
   const isPortfolioStatement =
@@ -119,15 +125,24 @@ export async function parseAndValidateTradePdf(file) {
     const asOnMatch = cleanedText.match(/Portfolio statement as on:\s*([0-9]{1,2}-[A-Za-z]{3}-[0-9]{4})/i);
     const statementDate = asOnMatch ? parseBrokerDate(asOnMatch[1]) : parseBrokerDate(cleanedText);
 
-    const depositMatch = cleanedText.match(/Total Deposit\s*:\s*([\d,]+\.\d{2})/i) ||
-                         cleanedText.match(/Deposit\s*:\s*([\d,]+\.\d{2})/i);
+    const depositMatch =
+      cleanedText.match(/Total Deposit\s*:\s*([\d,]+\.\d{2})/i) ||
+      cleanedText.match(/Deposit\s*:\s*([\d,]+\.\d{2})/i);
     const totalDeposit = depositMatch ? parseNum(depositMatch[1]) : 0;
 
-    const ledgerMatch = cleanedText.match(/Ledger Balance\/(?:Liabilities)\s*:\s*([\d,]+\.\d{2})/i);
+    const ledgerMatch = cleanedText.match(/Ledger Balance\/\(Liabilities\)\s*:\s*([\d,]+\.\d{2})/i);
     const ledgerBalance = ledgerMatch ? parseNum(ledgerMatch[1]) : 0;
 
+    const realizedMatch = cleanedText.match(/Realized Gain\/\(Loss\)\s*:\s*(\(?[\d,]+\.\d{2}\)?)/i);
+    const unrealizedMatch = cleanedText.match(/Unrealized Gain\/\(Loss\)\s*:\s*(\(?[\d,]+\.\d{2}\)?)/i);
+    const netGainMatch = cleanedText.match(/Net Gain\/\(Loss\)\s*:\s*(\(?[\d,]+\.\d{2}\)?)/i);
+
+    const statementRealized = realizedMatch ? parseNum(realizedMatch[1]) : null;
+    const statementUnrealized = unrealizedMatch ? parseNum(unrealizedMatch[1]) : null;
+    const statementNetGain = netGainMatch ? parseNum(netGainMatch[1]) : null;
+
     const holdings = [];
-    const portfolioRowRegex = /\b([A-Z]{2,12})\*?\s+([ABZNG])\s+(\d+)\s+(\d+)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/g;
+    const portfolioRowRegex = /\b([A-Z]{2,12})\*?\s+([ABZNG])\s+(\d+)\s+(\d+)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(\(?[\d,]+\.\d{2}\)?)/g;
     let m;
     while ((m = portfolioRowRegex.exec(cleanedText)) !== null) {
       const symbol = m[1];
@@ -140,7 +155,8 @@ export async function parseAndValidateTradePdf(file) {
         avgCostWithComm: parseNum(m[5]),
         totalCostWithComm: parseNum(m[6]),
         marketPrice: parseNum(m[7]),
-        marketValue: parseNum(m[8])
+        marketValue: parseNum(m[8]),
+        unrealizedGainLoss: parseNum(m[9])
       });
     }
 
@@ -155,6 +171,9 @@ export async function parseAndValidateTradePdf(file) {
       clientCode,
       totalDeposit,
       ledgerBalance,
+      statementRealized,
+      statementUnrealized,
+      statementNetGain,
       holdings,
       trades: []
     };
@@ -179,7 +198,9 @@ export async function parseAndValidateTradePdf(file) {
     const qty = parseInt(match[4].replace(/,/g, ''), 10);
     const avgRate = parseNum(match[5]);
     const grossAmount = parseNum(match[6]);
-    const commission = parseNum(match[7]);
+    // Standard 0.40% brokerage commission (40 paisa per 100 Tk) if PDF comm is missing
+    const parsedComm = parseNum(match[7]);
+    const commission = parsedComm > 0 ? parsedComm : Number((grossAmount * 0.004).toFixed(2));
     const netTotal = parseNum(match[9]);
 
     if (qty > 0 && avgRate > 0) {

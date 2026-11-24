@@ -1646,34 +1646,34 @@ export default function App() {
   const isMarketGain = portfolioSummary.totalActiveMarketValue >= portfolioSummary.totalActiveCost;
 
   return (
-    <div className="min-h-screen w-full bg-slate-50 flex flex-col overflow-x-hidden">
-      <header className="w-full bg-[#0B2B4C] text-white px-4 sm:px-6 lg:px-10 py-3.5 shadow-md sticky top-0 z-30">
-        <div className="w-full flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-amber-400 text-[#0B2B4C] flex items-center justify-center font-bold shadow shrink-0">
-              <TrendingUp className="w-5 h-5" />
+    <div className="min-h-screen w-full bg-slate-50 flex flex-col overflow-x-clip">
+      <header className="w-full bg-[#0B2B4C] text-white px-3 sm:px-6 lg:px-10 py-2.5 lg:py-3.5 shadow-md sticky top-0 z-30">
+        <div className="w-full flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-400 text-[#0B2B4C] flex items-center justify-center font-bold shadow shrink-0">
+              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-base md:text-lg tracking-tight truncate">
+                <span className="font-bold text-sm sm:text-base md:text-lg tracking-tight truncate">
                   {currentUser.name}
                 </span>
-                <span className="px-2 py-0.5 bg-white/15 rounded text-xs font-mono text-amber-300 shrink-0">
+                <span className="px-2 py-0.5 bg-white/15 rounded text-[11px] sm:text-xs font-mono text-amber-300 shrink-0">
                   {currentUser.clientCode}
                 </span>
               </div>
-              <p className="text-xs text-slate-300 truncate">
+              <p className="text-[11px] sm:text-xs text-slate-300 truncate">
                 {currentUser.brokerage} • BO: {currentUser.boId}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             {hasAnyUploadedPdf && (
               <button
                 type="button"
                 onClick={() => setShowLeftPdf((prev) => !prev)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors ${showLeftPdf
+                className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition-colors ${showLeftPdf
                   ? 'bg-amber-400 text-[#0B2B4C]'
                   : 'bg-white/10 hover:bg-white/20 text-white'
                   }`}
@@ -1696,7 +1696,7 @@ export default function App() {
             <button
               type="button"
               onClick={handleLogout}
-              className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors"
+              className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Logout</span>
@@ -1705,12 +1705,12 @@ export default function App() {
         </div>
       </header>
 
-      <div className="flex-1 w-full px-4 sm:px-6 lg:px-10 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="flex-1 w-full px-3 sm:px-6 lg:px-10 py-4 sm:py-6 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
         {showLeftPdf && (
-          <aside className="w-full lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[55vh] sm:h-[65vh] lg:h-[82vh] lg:sticky lg:top-20">
+          <aside className="w-full lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[50vh] sm:h-[60vh] lg:h-[calc(100vh-5.5rem)] lg:sticky lg:top-[4.75rem] z-20">
             {activePdfToDisplay ? (
               <>
-                <div className="px-4 py-3 bg-slate-100 border-b border-slate-200 space-y-2">
+                <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 bg-slate-100 border-b border-slate-200 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <span className="text-xs font-bold text-slate-800 block truncate">
@@ -1743,8 +1743,8 @@ export default function App() {
                             type="button"
                             onClick={() => setSelectedPdfId(pdfItem.id)}
                             className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap flex items-center gap-1 transition-all ${isCurrent
-                                ? 'bg-[#0B2B4C] text-white shadow-sm'
-                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                              ? 'bg-[#0B2B4C] text-white shadow-sm'
+                              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
                               }`}
                           >
                             <FileText className="w-3 h-3 shrink-0" />
@@ -1785,334 +1785,337 @@ export default function App() {
         <main
           className={
             showLeftPdf
-              ? 'w-full lg:col-span-7 space-y-6 min-w-0'
-              : 'w-full lg:col-span-12 space-y-6 min-w-0'
+              ? 'w-full lg:col-span-7 space-y-4 sm:space-y-6 min-w-0'
+              : 'w-full lg:col-span-12 space-y-4 sm:space-y-6 min-w-0'
           }
         >
-          {/* Top 4 KPI Cards — Always synced to the LATEST PDF date */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm min-w-0">
-              <p className="text-xs font-medium text-slate-500 mb-1">Active Investor Account</p>
-              <p className="text-lg font-bold text-slate-900 truncate">{currentUser.name}</p>
-              <p className="text-xs text-slate-500 mt-1 truncate">
-                {currentUser.email} • Code:{' '}
-                <strong className="text-slate-700">{currentUser.clientCode}</strong>
-              </p>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm min-w-0">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs font-medium text-slate-500">Total Deposit Amount</p>
-                <span className="px-2 py-0.5 rounded bg-emerald-50 text-[10px] font-semibold text-emerald-700">
-                  {latestStatementSnapshot ? `Latest: ${latestStatementSnapshot.date}` : 'PDF Verified'}
-                </span>
+          {/* Sticky Top Section on Desktop: KPI Cards + Date/Search/Upload Controls + Tabs */}
+          <div className="lg:sticky lg:top-[4.25rem] z-20 bg-slate-50/95 backdrop-blur-sm pb-2 space-y-3 sm:space-y-4">
+            {/* Top 4 KPI Cards — Always synced to the LATEST PDF date */}
+            <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+              <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm min-w-0">
+                <p className="text-[11px] font-medium text-slate-500 mb-0.5">Active Investor Account</p>
+                <p className="text-base sm:text-lg font-bold text-slate-900 truncate">{currentUser.name}</p>
+                <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">
+                  {currentUser.email} • Code:{' '}
+                  <strong className="text-slate-700">{currentUser.clientCode}</strong>
+                </p>
               </div>
-              <p className="text-2xl font-bold text-emerald-600">
-                ৳
-                {effectiveDepositAmount.toLocaleString('en-BD', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2
-                })}
-              </p>
-              <p className="text-xs text-slate-400 mt-1">Auto-synced from latest Portfolio PDF</p>
-            </div>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm min-w-0">
-              <p className="text-xs font-medium text-slate-500 mb-1">Active Share Buying Cost</p>
-              <p className="text-2xl font-bold text-emerald-600">
-                ৳
-                {portfolioSummary.totalActiveCost.toLocaleString('en-BD', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2
-                })}
-              </p>
-              <p className="text-xs mt-1 flex items-center gap-1.5 flex-wrap">
-                <span className="text-slate-500">Market Value:</span>
-                <span
-                  className={`font-bold px-2 py-0.5 rounded-md ${isMarketGain
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-rose-100 text-rose-700'
-                    }`}
-                >
+              <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm min-w-0">
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                  <p className="text-[11px] font-medium text-slate-500">Total Deposit Amount</p>
+                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-[10px] font-semibold text-emerald-700 truncate">
+                    {latestStatementSnapshot ? `Latest: ${latestStatementSnapshot.date}` : 'PDF Verified'}
+                  </span>
+                </div>
+                <p className="text-xl sm:text-2xl font-bold text-emerald-600">
                   ৳
-                  {portfolioSummary.totalActiveMarketValue.toLocaleString('en-BD', {
+                  {effectiveDepositAmount.toLocaleString('en-BD', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2
                   })}
-                </span>
-              </p>
-            </div>
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5 truncate">Auto-synced from latest Portfolio PDF</p>
+              </div>
 
-            <div
-              className={`p-5 rounded-2xl border shadow-sm min-w-0 ${portfolioSummary.totalNetProfit >= 0
-                ? 'bg-emerald-50/70 border-emerald-200'
-                : 'bg-rose-50/70 border-rose-200'
-                }`}
-            >
-              <p className="text-xs font-medium text-slate-600 mb-1">
-                Total Net Gain / Loss (Realized + Unrealized)
-              </p>
-              <p
-                className={`text-xl sm:text-2xl font-bold flex items-center gap-1 flex-wrap ${portfolioSummary.totalNetProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                  }`}
-              >
-                {portfolioSummary.totalNetProfit >= 0 ? (
-                  <ArrowUpRight className="w-5 h-5 shrink-0" />
-                ) : (
-                  <ArrowDownRight className="w-5 h-5 shrink-0" />
-                )}
-                <span>
-                  {portfolioSummary.totalNetProfit >= 0 ? '+' : ''}৳
-                  {portfolioSummary.totalNetProfit.toLocaleString('en-BD', {
+              <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm min-w-0">
+                <p className="text-[11px] font-medium text-slate-500 mb-0.5">Active Share Buying Cost</p>
+                <p className="text-xl sm:text-2xl font-bold text-emerald-600">
+                  ৳
+                  {portfolioSummary.totalActiveCost.toLocaleString('en-BD', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2
-                  })}{' '}
-                  ({portfolioSummary.netPct >= 0 ? '+' : ''}
-                  {portfolioSummary.netPct.toFixed(2)}%)
-                </span>
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                Includes 0.40% Buy &amp; Sell commission • Click share for chart
-              </p>
-            </div>
-          </section>
-
-          {/* Controls: Marked Calendar Picker + Search + Multi-PDF Upload */}
-          <section className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-            <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
-              <div className="relative" ref={calendarPopoverRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsCalendarOpen((prev) => !prev)}
-                  className="w-full lg:w-auto flex items-center gap-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2 text-left transition-colors"
-                >
-                  <Calendar className="w-4 h-4 text-[#0B2B4C] shrink-0" />
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      Custom Date Select (Marked Trade Dates)
-                    </span>
-                    <span className="text-sm font-semibold text-slate-900 font-mono">
-                      {selectedDate || 'Select Trade Date'}
-                    </span>
-                  </div>
-                </button>
-
-                {isCalendarOpen && (
-                  <div className="absolute left-0 mt-2 w-72 sm:w-80 bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 z-40">
-                    <div className="flex items-center justify-between mb-3">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCalendarMonth(
-                            new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1)
-                          )
-                        }
-                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <span className="text-xs font-bold text-slate-800">
-                        {calendarMonth.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCalendarMonth(
-                            new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1)
-                          )
-                        }
-                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-1">
-                      {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
-                        <div key={d}>{d}</div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-1 text-center">
-                      {calendarDays.map((cell, idx) => {
-                        if (!cell) return <div key={`empty-${idx}`} />;
-                        const isMarked = markedTradeDates.includes(cell.dateStr);
-                        const pdfCount = Array.isArray(pdfsByDate[cell.dateStr])
-                          ? pdfsByDate[cell.dateStr].length
-                          : 0;
-                        const isSelected = selectedDate === cell.dateStr;
-
-                        return (
-                          <button
-                            key={cell.dateStr}
-                            type="button"
-                            onClick={() => handleSelectTradeDate(cell.dateStr)}
-                            title={
-                              isMarked
-                                ? `Trade Date: ${cell.dateStr}${pdfCount > 0 ? ` (${pdfCount} PDF Stored)` : ''}`
-                                : cell.dateStr
-                            }
-                            className={`relative h-9 rounded-lg text-xs font-semibold flex flex-col items-center justify-center transition-all ${isSelected
-                              ? 'bg-[#0B2B4C] text-white shadow-sm'
-                              : isMarked
-                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 hover:bg-emerald-200'
-                                : 'text-slate-600 hover:bg-slate-100'
-                              }`}
-                          >
-                            <span>{cell.day}</span>
-                            {isMarked && (
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-amber-400' : 'bg-emerald-600'
-                                  }`}
-                              />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
-                        <span>Marked = Trade / PDF Date</span>
-                      </span>
-                      <span>{markedTradeDates.length} Days</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="relative flex-1 min-w-0">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search company symbol (e.g., BRACBANK, CITYBANK, SHARPIND)..."
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0B2B4C] focus:bg-white"
-                />
-              </div>
-
-              <div className="flex flex-col items-stretch lg:items-end">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="application/pdf"
-                  multiple
-                  onChange={handlePdfUpload}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  disabled={isUploading}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full lg:w-auto px-5 py-3 bg-[#0B2B4C] hover:bg-[#082038] disabled:opacity-60 text-white text-sm font-semibold rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all"
-                >
-                  <Upload className="w-4 h-4 text-amber-400" />
-                  <span>{isUploading ? 'Validating PDF...' : 'Upload Trade PDF'}</span>
-                </button>
-              </div>
-            </div>
-
-            {pdfsForSelectedDate.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <span className="text-[11px] font-semibold text-slate-500">
-                  Stored PDFs ({selectedDate}):
-                </span>
-                {pdfsForSelectedDate.map((pdfItem, idx) => (
-                  <button
-                    key={pdfItem.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedPdfId(pdfItem.id);
-                      setShowLeftPdf(true);
-                    }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors ${activePdfToDisplay?.id === pdfItem.id && showLeftPdf
-                      ? 'bg-[#0B2B4C] text-white border-[#0B2B4C]'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  })}
+                </p>
+                <p className="text-[11px] sm:text-xs mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  <span className="text-slate-500">Market Value:</span>
+                  <span
+                    className={`font-bold px-2 py-0.5 rounded-md ${isMarketGain
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-rose-100 text-rose-700'
                       }`}
                   >
-                    <FileText className="w-3.5 h-3.5 text-amber-500" />
-                    <span>
-                      #{idx + 1} {pdfItem.name}
-                    </span>
-                  </button>
-                ))}
+                    ৳
+                    {portfolioSummary.totalActiveMarketValue.toLocaleString('en-BD', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}
+                  </span>
+                </p>
               </div>
-            )}
 
-            <div className="flex items-start sm:items-center gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200/80 rounded-xl px-3.5 py-2">
-              <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
-              <span>
-                <strong>নির্দেশনা:</strong> শুধুমাত্র ব্রোকারেজ হাউজের{' '}
-                <strong>Trade Confirmation</strong> অথবা <strong>Portfolio Statement PDF</strong>{' '}
-                আপলোড করুন। একাধিক PDF আপলোড করলে সব ডাটা সংরক্ষিত থাকবে এবং ড্যাশবোর্ডে সর্বশেষ তারিখের PDF ডাটা অটোমেটিক দেখাবে।
-              </span>
-            </div>
-
-            {uploadStatus && (
               <div
-                className={`p-3.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-3 transition-opacity duration-300 ${uploadStatus.type === 'error'
-                  ? 'bg-rose-50 border-rose-200 text-rose-800'
-                  : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                className={`p-3.5 sm:p-4 rounded-2xl border shadow-sm min-w-0 ${portfolioSummary.totalNetProfit >= 0
+                  ? 'bg-emerald-50/70 border-emerald-200'
+                  : 'bg-rose-50/70 border-rose-200'
                   }`}
               >
-                <div className="flex items-center gap-2">
-                  {uploadStatus.type === 'error' ? (
-                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  )}
-                  <span>{uploadStatus.message}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setUploadStatus(null)}
-                  className="text-slate-500 hover:text-slate-800"
+                <p className="text-[11px] font-medium text-slate-600 mb-0.5 truncate">
+                  Total Net Gain / Loss (Realized + Unrealized)
+                </p>
+                <p
+                  className={`text-lg sm:text-xl font-bold flex items-center gap-1 flex-wrap ${portfolioSummary.totalNetProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                    }`}
                 >
-                  <X className="w-4 h-4" />
-                </button>
+                  {portfolioSummary.totalNetProfit >= 0 ? (
+                    <ArrowUpRight className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                  ) : (
+                    <ArrowDownRight className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                  )}
+                  <span>
+                    {portfolioSummary.totalNetProfit >= 0 ? '+' : ''}৳
+                    {portfolioSummary.totalNetProfit.toLocaleString('en-BD', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}{' '}
+                    ({portfolioSummary.netPct >= 0 ? '+' : ''}
+                    {portfolioSummary.netPct.toFixed(2)}%)
+                  </span>
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                  Includes 0.40% Buy &amp; Sell commission • Click share for chart
+                </p>
               </div>
-            )}
-          </section>
+            </section>
 
-          {/* Navigation Tabs */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('full')}
-              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${activeTab === 'full'
-                ? 'bg-[#0B2B4C] text-white shadow-sm'
-                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                }`}
-            >
-              <Layers className="w-4 h-4 shrink-0" />
-              <span>Full Share Information (All Holdings &amp; Sold History)</span>
-            </button>
+            {/* Controls: Marked Calendar Picker + Search + Multi-PDF Upload */}
+            <section className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5 sm:space-y-3">
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5 sm:gap-3">
+                <div className="relative w-full lg:w-auto" ref={calendarPopoverRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsCalendarOpen((prev) => !prev)}
+                    className="w-full lg:w-auto flex items-center gap-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2 text-left transition-colors"
+                  >
+                    <Calendar className="w-4 h-4 text-[#0B2B4C] shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 truncate">
+                        Custom Date Select (Marked Trade Dates)
+                      </span>
+                      <span className="text-sm font-semibold text-slate-900 font-mono truncate">
+                        {selectedDate || 'Select Trade Date'}
+                      </span>
+                    </div>
+                  </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('perday')}
-              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${activeTab === 'perday'
-                ? 'bg-[#0B2B4C] text-white shadow-sm'
-                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                }`}
-            >
-              <RefreshCw className="w-4 h-4 shrink-0" />
-              <span>Per-Day Trading ({selectedDate || 'Select Date'})</span>
-            </button>
+                  {isCalendarOpen && (
+                    <div className="absolute left-0 mt-2 w-72 sm:w-80 bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 z-40">
+                      <div className="flex items-center justify-between mb-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCalendarMonth(
+                              new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1)
+                            )
+                          }
+                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-xs font-bold text-slate-800">
+                          {calendarMonth.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCalendarMonth(
+                              new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1)
+                            )
+                          }
+                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('summary')}
-              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${activeTab === 'summary'
-                ? 'bg-[#0B2B4C] text-white shadow-sm'
-                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                }`}
-            >
-              <Filter className="w-4 h-4 shrink-0" />
-              <span>Buying &amp; Selling Summary</span>
-            </button>
+                      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-1">
+                        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+                          <div key={d}>{d}</div>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-7 gap-1 text-center">
+                        {calendarDays.map((cell, idx) => {
+                          if (!cell) return <div key={`empty-${idx}`} />;
+                          const isMarked = markedTradeDates.includes(cell.dateStr);
+                          const pdfCount = Array.isArray(pdfsByDate[cell.dateStr])
+                            ? pdfsByDate[cell.dateStr].length
+                            : 0;
+                          const isSelected = selectedDate === cell.dateStr;
+
+                          return (
+                            <button
+                              key={cell.dateStr}
+                              type="button"
+                              onClick={() => handleSelectTradeDate(cell.dateStr)}
+                              title={
+                                isMarked
+                                  ? `Trade Date: ${cell.dateStr}${pdfCount > 0 ? ` (${pdfCount} PDF Stored)` : ''}`
+                                  : cell.dateStr
+                              }
+                              className={`relative h-9 rounded-lg text-xs font-semibold flex flex-col items-center justify-center transition-all ${isSelected
+                                ? 'bg-[#0B2B4C] text-white shadow-sm'
+                                : isMarked
+                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 hover:bg-emerald-200'
+                                  : 'text-slate-600 hover:bg-slate-100'
+                                }`}
+                            >
+                              <span>{cell.day}</span>
+                              {isMarked && (
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-amber-400' : 'bg-emerald-600'
+                                    }`}
+                                />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                          <span>Marked = Trade / PDF Date</span>
+                        </span>
+                        <span>{markedTradeDates.length} Days</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative flex-1 min-w-0">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search company symbol (e.g., BRACBANK, CITYBANK, SHARPIND)..."
+                    className="w-full pl-10 pr-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0B2B4C] focus:bg-white"
+                  />
+                </div>
+
+                <div className="flex flex-col items-stretch lg:items-end shrink-0">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="application/pdf"
+                    multiple
+                    onChange={handlePdfUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    disabled={isUploading}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full lg:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-[#0B2B4C] hover:bg-[#082038] disabled:opacity-60 text-white text-sm font-semibold rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Upload className="w-4 h-4 text-amber-400" />
+                    <span>{isUploading ? 'Validating PDF...' : 'Upload Trade PDF'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {pdfsForSelectedDate.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-0.5">
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Stored PDFs ({selectedDate}):
+                  </span>
+                  {pdfsForSelectedDate.map((pdfItem, idx) => (
+                    <button
+                      key={pdfItem.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPdfId(pdfItem.id);
+                        setShowLeftPdf(true);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors ${activePdfToDisplay?.id === pdfItem.id && showLeftPdf
+                        ? 'bg-[#0B2B4C] text-white border-[#0B2B4C]'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                    >
+                      <FileText className="w-3.5 h-3.5 text-amber-500" />
+                      <span className="truncate max-w-[180px] sm:max-w-none">
+                        #{idx + 1} {pdfItem.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-start sm:items-center gap-2 text-[11px] sm:text-xs text-amber-800 bg-amber-50 border border-amber-200/80 rounded-xl px-3 py-2">
+                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                <span>
+                  <strong>নির্দেশনা:</strong> শুধুমাত্র ব্রোকারেজ হাউজের{' '}
+                  <strong>Trade Confirmation</strong> অথবা <strong>Portfolio Statement PDF</strong>{' '}
+                  আপলোড করুন। একাধিক PDF আপলোড করলে সব ডাটা সংরক্ষিত থাকবে এবং ড্যাশবোর্ডে সর্বশেষ তারিখের PDF ডাটা অটোমেটিক দেখাবে।
+                </span>
+              </div>
+
+              {uploadStatus && (
+                <div
+                  className={`p-3 rounded-xl border text-xs font-medium flex items-center justify-between gap-3 transition-opacity duration-300 ${uploadStatus.type === 'error'
+                    ? 'bg-rose-50 border-rose-200 text-rose-800'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {uploadStatus.type === 'error' ? (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    )}
+                    <span>{uploadStatus.message}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setUploadStatus(null)}
+                    className="text-slate-500 hover:text-slate-800"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </section>
+
+            {/* Navigation Tabs */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('full')}
+                className={`w-full sm:w-auto px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center sm:justify-start gap-2 transition-all ${activeTab === 'full'
+                  ? 'bg-[#0B2B4C] text-white shadow-sm'
+                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+              >
+                <Layers className="w-4 h-4 shrink-0" />
+                <span>Full Share Information (All Holdings &amp; Sold History)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('perday')}
+                className={`w-full sm:w-auto px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center sm:justify-start gap-2 transition-all ${activeTab === 'perday'
+                  ? 'bg-[#0B2B4C] text-white shadow-sm'
+                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+              >
+                <RefreshCw className="w-4 h-4 shrink-0" />
+                <span>Per-Day Trading ({selectedDate || 'Select Date'})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('summary')}
+                className={`w-full sm:w-auto px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center sm:justify-start gap-2 transition-all ${activeTab === 'summary'
+                  ? 'bg-[#0B2B4C] text-white shadow-sm'
+                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+              >
+                <Filter className="w-4 h-4 shrink-0" />
+                <span>Buying &amp; Selling Summary</span>
+              </button>
+            </div>
           </div>
 
           {activeTab === 'full' && (

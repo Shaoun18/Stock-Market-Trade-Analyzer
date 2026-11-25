@@ -27,22 +27,7 @@ import {
 } from 'lucide-react';
 import { DEMO_ACCOUNT, INITIAL_DEMO_TRADES } from './demoData';
 import { parseAndValidateTradePdf } from './pdfParser';
-import {
-  auth,
-  db,
-  storage,
-  isFirebaseConfigured,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  doc,
-  getDoc,
-  setDoc,
-  ref,
-  uploadBytes,
-  getDownloadURL
-} from './firebase';
+const API_BASE = 'http://localhost:5000/api';
 import ShareDetailGraph from './ShareDetailGraph';
 
 const STORAGE_USERS_KEY = 'dse_tracker_users_v6';
@@ -225,10 +210,14 @@ export default function App() {
     nextPdfMeta,
     nextSnapshots
   ) => {
-    localStorage.setItem(STORAGE_TRADES_PREFIX + uid, JSON.stringify(nextTrades));
-    localStorage.setItem(STORAGE_MKT_PREFIX + uid, JSON.stringify(nextMarketPrices));
-    localStorage.setItem(STORAGE_STMT_PREFIX + uid, JSON.stringify(nextSnapshots || {}));
-    localStorage.setItem('dse_imported_pdf_hashes_v6', JSON.stringify(nextHashes));
+    // Demo অ্যাকাউন্ট আগের মতোই ব্রাউজারে থাকবে
+    if (uid && uid.startsWith('demo-')) {
+      localStorage.setItem(STORAGE_TRADES_PREFIX + uid, JSON.stringify(nextTrades));
+      localStorage.setItem(STORAGE_MKT_PREFIX + uid, JSON.stringify(nextMarketPrices));
+      localStorage.setItem(STORAGE_STMT_PREFIX + uid, JSON.stringify(nextSnapshots || {}));
+      localStorage.setItem('dse_imported_pdf_hashes_v6', JSON.stringify(nextHashes));
+      return;
+    }
 
     const serializablePdfMeta = {};
     for (const [dt, list] of Object.entries(nextPdfMeta || {})) {
@@ -239,28 +228,22 @@ export default function App() {
         }
       }
     }
-    if (Object.keys(serializablePdfMeta).length > 0) {
-      localStorage.setItem(STORAGE_PDF_MAP_PREFIX + uid, JSON.stringify(serializablePdfMeta));
-    }
 
-    if (isFirebaseConfigured && db && uid && !uid.startsWith('demo-')) {
-      try {
-        await setDoc(
-          doc(db, 'users', uid),
-          {
-            profile: userProfile,
-            trades: nextTrades,
-            marketPrices: nextMarketPrices,
-            statementSnapshots: nextSnapshots || {},
-            importedHashes: nextHashes,
-            pdfsByDate: serializablePdfMeta,
-            updatedAt: new Date().toISOString()
-          },
-          { merge: true }
-        );
-      } catch (err) {
-        console.error('Firestore sync error:', err);
-      }
+    try {
+      await fetch(`${API_BASE}/workspace/${uid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile: userProfile,
+          trades: nextTrades,
+          marketPrices: nextMarketPrices,
+          statementSnapshots: nextSnapshots || {},
+          importedHashes: nextHashes,
+          pdfsByDate: serializablePdfMeta,
+        }),
+      });
+    } catch (err) {
+      console.error('PostgreSQL sync error:', err);
     }
   };
 
@@ -272,51 +255,24 @@ export default function App() {
     let loadedSnapshots = {};
 
     try {
-      loadedTrades = JSON.parse(localStorage.getItem(STORAGE_TRADES_PREFIX + uid) || '[]');
-      loadedMkt = JSON.parse(localStorage.getItem(STORAGE_MKT_PREFIX + uid) || '{}');
-      loadedPdfs = normalizePdfMap(JSON.parse(localStorage.getItem(STORAGE_PDF_MAP_PREFIX + uid) || '{}'));
-      loadedSnapshots = JSON.parse(localStorage.getItem(STORAGE_STMT_PREFIX + uid) || '{}');
-    } catch {
-      loadedTrades = [];
-    }
-
-    if (isFirebaseConfigured && db && !uid.startsWith('demo-')) {
-      try {
-        const snap = await getDoc(doc(db, 'users', uid));
-        if (snap.exists()) {
-          const cloudData = snap.data();
-          if (cloudData.profile) {
-            userObj = { ...userObj, ...cloudData.profile };
-            setCurrentUser(userObj);
-            localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userObj));
-          }
-          if (Array.isArray(cloudData.trades)) {
-            loadedTrades = cloudData.trades;
-            localStorage.setItem(STORAGE_TRADES_PREFIX + uid, JSON.stringify(loadedTrades));
-          }
-          if (cloudData.marketPrices) {
-            loadedMkt = cloudData.marketPrices;
-            localStorage.setItem(STORAGE_MKT_PREFIX + uid, JSON.stringify(loadedMkt));
-          }
-          if (cloudData.statementSnapshots) {
-            loadedSnapshots = cloudData.statementSnapshots;
-            localStorage.setItem(STORAGE_STMT_PREFIX + uid, JSON.stringify(loadedSnapshots));
-          }
-          if (Array.isArray(cloudData.importedHashes)) {
-            setImportedHashes(cloudData.importedHashes);
-            localStorage.setItem('dse_imported_pdf_hashes_v6', JSON.stringify(cloudData.importedHashes));
-          }
-          if (cloudData.pdfsByDate) {
-            const normalizedCloud = normalizePdfMap(cloudData.pdfsByDate);
-            loadedPdfs = { ...loadedPdfs, ...normalizedCloud };
-            localStorage.setItem(STORAGE_PDF_MAP_PREFIX + uid, JSON.stringify(loadedPdfs));
-          }
-        } else {
-          await syncWorkspaceToCloud(uid, userObj, loadedTrades, loadedMkt, importedHashes, loadedPdfs, loadedSnapshots);
+      if (uid.startsWith('demo-')) {
+        loadedTrades = JSON.parse(localStorage.getItem(STORAGE_TRADES_PREFIX + uid) || '[]');
+        loadedMkt = JSON.parse(localStorage.getItem(STORAGE_MKT_PREFIX + uid) || '{}');
+        loadedPdfs = normalizePdfMap(JSON.parse(localStorage.getItem(STORAGE_PDF_MAP_PREFIX + uid) || '{}'));
+        loadedSnapshots = JSON.parse(localStorage.getItem(STORAGE_STMT_PREFIX + uid) || '{}');
+      } else {
+        const res = await fetch(`${API_BASE}/workspace/${uid}`);
+        const data = await res.json();
+        loadedTrades = data.trades || [];
+        loadedMkt = data.marketPrices || {};
+        loadedPdfs = normalizePdfMap(data.pdfsByDate || {});
+        loadedSnapshots = data.statementSnapshots || {};
+        if (Array.isArray(data.importedHashes)) {
+          setImportedHashes(data.importedHashes);
         }
-      } catch (err) {
-        console.error('Firestore load error:', err);
       }
+    } catch (err) {
+      console.error('PostgreSQL load error:', err);
     }
 
     setTrades(loadedTrades);
@@ -365,30 +321,6 @@ export default function App() {
         localStorage.removeItem(STORAGE_SESSION_KEY);
       }
     }
-
-    if (isFirebaseConfigured && auth) {
-      const unsub = onAuthStateChanged(auth, async (fbUser) => {
-        if (fbUser) {
-          const sessionRaw = localStorage.getItem(STORAGE_SESSION_KEY);
-          const existing = sessionRaw ? JSON.parse(sessionRaw) : null;
-          if (!existing || existing.uid !== fbUser.uid) {
-            const userObj = {
-              uid: fbUser.uid,
-              name: fbUser.displayName || fbUser.email.split('@')[0],
-              clientCode: 'BR8576',
-              boId: '1201820078119171',
-              brokerage: 'BRAC EPL Stock Brokerage Ltd.',
-              email: fbUser.email,
-              depositAmount: 0
-            };
-            localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userObj));
-            setCurrentUser(userObj);
-            await loadWorkspaceData(userObj);
-          }
-        }
-      });
-      return () => unsub();
-    }
   }, []);
 
   const handleSignIn = async (e) => {
@@ -416,40 +348,21 @@ export default function App() {
         return;
       }
 
-      if (isFirebaseConfigured && auth) {
-        const cred = await signInWithEmailAndPassword(auth, emailTrimmed, loginPassword);
-        const fbUser = cred.user;
-        const userObj = {
-          uid: fbUser.uid,
-          name: fbUser.displayName || emailTrimmed.split('@')[0],
-          clientCode: 'BR8576',
-          boId: '1201820078119171',
-          brokerage: 'BRAC EPL Stock Brokerage Ltd.',
-          email: fbUser.email,
-          depositAmount: 0
-        };
-        localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userObj));
-        setCurrentUser(userObj);
-        await loadWorkspaceData(userObj);
-        setLoginEmail('');
-        setLoginPassword('');
-        setLoginTouched({});
+      const res = await fetch(`${API_BASE}/auth/signin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailTrimmed, password: loginPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAuthError(data.error || 'ইমেইল অথবা পাসওয়ার্ড সঠিক নয়।');
         return;
       }
 
-      const users = JSON.parse(localStorage.getItem(STORAGE_USERS_KEY) || '[]');
-      const matchedUser = users.find(
-        (u) => u.email.toLowerCase() === emailTrimmed && u.password === loginPassword
-      );
-
-      if (!matchedUser) {
-        setAuthError('ইমেইল অথবা পাসওয়ার্ড সঠিক নয়।');
-        return;
-      }
-
-      localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(matchedUser));
-      setCurrentUser(matchedUser);
-      await loadWorkspaceData(matchedUser);
+      const userObj = data;
+      localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userObj));
+      setCurrentUser(userObj);
+      await loadWorkspaceData(userObj);
       setLoginEmail('');
       setLoginPassword('');
       setLoginTouched({});
@@ -487,38 +400,25 @@ export default function App() {
     setIsAuthLoading(true);
 
     try {
-      let newUser;
-
-      if (isFirebaseConfigured && auth) {
-        const cred = await createUserWithEmailAndPassword(auth, signupEmail.trim(), signupPassword);
-        newUser = {
-          uid: cred.user.uid,
+      const res = await fetch(`${API_BASE}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name: signupName.trim(),
-          clientCode: signupClientCode.trim().toUpperCase(),
+          clientCode: signupClientCode.trim(),
           boId: signupBoId.trim(),
           brokerage: signupBrokerage,
-          email: signupEmail.trim().toLowerCase(),
-          depositAmount: 0
-        };
-      } else {
-        const users = JSON.parse(localStorage.getItem(STORAGE_USERS_KEY) || '[]');
-        if (users.some((u) => u.email.toLowerCase() === signupEmail.trim().toLowerCase())) {
-          setAuthError('এই ইমেইল দিয়ে ইতিমধ্যে একটি অ্যাকাউন্ট খোলা আছে। অনুগ্রহ করে লগইন করুন।');
-          setIsAuthLoading(false);
-          return;
-        }
-        newUser = {
-          uid: 'user-' + Date.now(),
-          name: signupName.trim(),
-          clientCode: signupClientCode.trim().toUpperCase(),
-          boId: signupBoId.trim(),
-          brokerage: signupBrokerage,
-          email: signupEmail.trim().toLowerCase(),
+          email: signupEmail.trim(),
           password: signupPassword,
-          depositAmount: 0
-        };
-        localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify([...users, newUser]));
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAuthError(data.error || 'অ্যাকাউন্ট তৈরি করতে সমস্যা হয়েছে।');
+        setIsAuthLoading(false);
+        return;
       }
+      const newUser = data;
 
       localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(newUser));
       setCurrentUser(newUser);
@@ -544,11 +444,6 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    if (isFirebaseConfigured && auth) {
-      try {
-        await signOut(auth);
-      } catch { }
-    }
     localStorage.removeItem(STORAGE_SESSION_KEY);
     setCurrentUser(null);
     setTrades([]);
@@ -618,14 +513,20 @@ export default function App() {
           }
 
           let pdfViewUrl = URL.createObjectURL(file);
-          if (isFirebaseConfigured && storage && currentUser?.uid && !currentUser.uid.startsWith('demo-')) {
+          if (currentUser?.uid && !currentUser.uid.startsWith('demo-')) {
             try {
-              const uniqueKey = `${Date.now()}_${file.name}`;
-              const storageRef = ref(storage, `users/${currentUser.uid}/pdfs/${result.detectedDate}_${uniqueKey}`);
-              await uploadBytes(storageRef, file);
-              pdfViewUrl = await getDownloadURL(storageRef);
+              const formData = new FormData();
+              formData.append('pdf', file);
+              const uploadRes = await fetch(`${API_BASE}/upload-pdf/${currentUser.uid}`, {
+                method: 'POST',
+                body: formData,
+              });
+              const uploadData = await uploadRes.json();
+              if (uploadRes.ok && uploadData.url) {
+                pdfViewUrl = uploadData.url; // পিসির storage/pdfs ফোল্ডারের লিংক
+              }
             } catch (storageErr) {
-              console.warn('Firebase Storage upload fallback to local blob:', storageErr);
+              console.warn('Local PDF upload failed, using temporary blob:', storageErr);
             }
           }
 
@@ -1635,7 +1536,7 @@ export default function App() {
             )}
 
             <p className="text-center text-xs text-slate-400 mt-6">
-              প্রতিটি ইউজারের ডাটা সম্পূর্ণ আলাদাভাবে সংরক্ষিত থাকে • Firebase Cloud Ready
+              প্রতিটি ইউজারের ডাটা সম্পূর্ণ আলাদাভাবে সংরক্ষিত থাকে • PostgreSQL Local PC Ready
             </p>
           </div>
         </div>
@@ -1690,7 +1591,7 @@ export default function App() {
 
             <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>{isFirebaseConfigured ? 'Firebase Connected' : 'Local Cloud Mode'}</span>
+              <span>PostgreSQL Local PC Mode</span>
             </div>
 
             <button

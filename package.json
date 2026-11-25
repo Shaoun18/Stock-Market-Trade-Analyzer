@@ -1,17 +1,21 @@
 {
   "name": "dse-multi-brokerage-tracker",
   "private": true,
-  "version": "4.0.0",
+  "version": "5.0.0-local-pg",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "node server/index.js",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "firebase": "^11.0.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
     "lucide-react": "^0.460.0",
+    "multer": "^1.4.5-lts.1",
     "pdfjs-dist": "^4.8.69",
+    "pg": "^8.13.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

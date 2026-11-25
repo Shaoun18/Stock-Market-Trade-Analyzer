@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.join(__dirname, '..');
 const PDF_STORAGE_DIR = path.join(ROOT_DIR, 'storage', 'pdfs');
 
-// Create a folder for storing PDFs on the PC if it does not exist
+// পিসিতে PDF রাখার ফোল্ডার না থাকলে তৈরি করবে
 fs.mkdirSync(PDF_STORAGE_DIR, { recursive: true });
 
 const { Pool } = pg;
@@ -19,11 +19,11 @@ const pool = new Pool({
   user: 'postgres',
   host: 'localhost',
   database: 'dse_tracker',
-  password: 'YOUR_POSTGRES_PASSWORD', // <-- Use PostgreSQL database password
+  password: 'YOUR_POSTGRES_PASSWORD', // <-- আপনার PostgreSQL পাসওয়ার্ড দিন
   port: 5432,
 });
 
-// Create tables if they don't exist
+// টেবিল না থাকলে সার্ভার চালুর সময় নিজে থেকেই তৈরি করবে
 async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -55,10 +55,10 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// Route to directly open PDFs from the PC folder
+// পিসির ফোল্ডার থেকে সরাসরি ব্রাউজারে PDF ওপেন করার রাউট
 app.use('/local-pdfs', express.static(PDF_STORAGE_DIR));
 
-// Multer to save PDFs to the PC disk
+// Multer দিয়ে পিসির হার্ডডিস্কে PDF সংরক্ষণ
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uid = String(req.params.uid || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -73,7 +73,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Signup API
+// ১. সাইন-আপ API
 app.post('/api/auth/signup', async (req, res) => {
   const { name, clientCode, boId, brokerage, email, password } = req.body;
   try {
@@ -103,7 +103,7 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-// Login API
+// ২. লগইন API
 app.post('/api/auth/signin', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -129,7 +129,7 @@ app.post('/api/auth/signin', async (req, res) => {
   }
 });
 
-// Load user data and PDF list from the database API
+// ৩. ডাটাবেজ থেকে ইউজারের সব ডাটা ও PDF লিস্ট লোড API
 app.get('/api/workspace/:uid', async (req, res) => {
   const { uid } = req.params;
   try {
@@ -150,7 +150,7 @@ app.get('/api/workspace/:uid', async (req, res) => {
   }
 });
 
-// Upload PDF to the PC disk API
+// ৪. পিসির হার্ডডিস্কে PDF ফাইল আপলোড ও সেভ API
 app.post('/api/upload-pdf/:uid', upload.single('pdf'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No PDF uploaded' });
   const uid = String(req.params.uid).replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -158,7 +158,7 @@ app.post('/api/upload-pdf/:uid', upload.single('pdf'), (req, res) => {
   res.json({ url: fileUrl, savedPath: req.file.path });
 });
 
-// Save user data to the database API
+// ৫. PostgreSQL-এ ট্রেড, ব্যালেন্স ও PDF মেটাডাটা সিঙ্ক API
 app.post('/api/workspace/:uid', async (req, res) => {
   const { uid } = req.params;
   const { profile, trades, marketPrices, statementSnapshots, importedHashes, pdfsByDate } = req.body;

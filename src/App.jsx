@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { DEMO_ACCOUNT, INITIAL_DEMO_TRADES } from './demoData';
 import { parseAndValidateTradePdf } from './pdfParser';
-const API_BASE = 'http://localhost:5000/api';
+import { APP_MODE, signIn, signUp, loadWorkspace, saveWorkspace, savePdf } from './storage.js';
 import ShareDetailGraph from './ShareDetailGraph';
 
 const STORAGE_USERS_KEY = 'dse_tracker_users_v6';
@@ -222,7 +222,7 @@ export default function App() {
     const serializablePdfMeta = {};
     for (const [dt, list] of Object.entries(nextPdfMeta || {})) {
       if (Array.isArray(list)) {
-        const persistent = list.filter((entry) => entry && entry.url && !entry.url.startsWith('blob:'));
+        const persistent = list.filter((entry) => entry && entry.url && (entry.storageKey || !entry.url.startsWith('blob:')));
         if (persistent.length > 0) {
           serializablePdfMeta[dt] = persistent;
         }
@@ -230,20 +230,16 @@ export default function App() {
     }
 
     try {
-      await fetch(`${API_BASE}/workspace/${uid}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          profile: userProfile,
-          trades: nextTrades,
-          marketPrices: nextMarketPrices,
-          statementSnapshots: nextSnapshots || {},
-          importedHashes: nextHashes,
-          pdfsByDate: serializablePdfMeta,
-        }),
+      await saveWorkspace(uid, {
+        profile: userProfile,
+        trades: nextTrades,
+        marketPrices: nextMarketPrices,
+        statementSnapshots: nextSnapshots || {},
+        importedHashes: nextHashes,
+        pdfsByDate: serializablePdfMeta,
       });
     } catch (err) {
-      console.error('PostgreSQL sync error:', err);
+      console.error('Storage sync error:', err);
     }
   };
 
@@ -261,8 +257,7 @@ export default function App() {
         loadedPdfs = normalizePdfMap(JSON.parse(localStorage.getItem(STORAGE_PDF_MAP_PREFIX + uid) || '{}'));
         loadedSnapshots = JSON.parse(localStorage.getItem(STORAGE_STMT_PREFIX + uid) || '{}');
       } else {
-        const res = await fetch(`${API_BASE}/workspace/${uid}`);
-        const data = await res.json();
+        const data = await loadWorkspace(uid);
         loadedTrades = data.trades || [];
         loadedMkt = data.marketPrices || {};
         loadedPdfs = normalizePdfMap(data.pdfsByDate || {});
@@ -272,7 +267,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error('PostgreSQL load error:', err);
+      console.error('Storage load error:', err);
     }
 
     setTrades(loadedTrades);
@@ -348,18 +343,7 @@ export default function App() {
         return;
       }
 
-      const res = await fetch(`${API_BASE}/auth/signin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailTrimmed, password: loginPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setAuthError(data.error || 'ইমেইল অথবা পাসওয়ার্ড সঠিক নয়।');
-        return;
-      }
-
-      const userObj = data;
+      const userObj = await signIn(emailTrimmed, loginPassword);
       localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userObj));
       setCurrentUser(userObj);
       await loadWorkspaceData(userObj);
@@ -400,25 +384,14 @@ export default function App() {
     setIsAuthLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/auth/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: signupName.trim(),
-          clientCode: signupClientCode.trim(),
-          boId: signupBoId.trim(),
-          brokerage: signupBrokerage,
-          email: signupEmail.trim(),
-          password: signupPassword,
-        }),
+      const newUser = await signUp({
+        name: signupName.trim(),
+        clientCode: signupClientCode.trim(),
+        boId: signupBoId.trim(),
+        brokerage: signupBrokerage,
+        email: signupEmail.trim(),
+        password: signupPassword,
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setAuthError(data.error || 'অ্যাকাউন্ট তৈরি করতে সমস্যা হয়েছে।');
-        setIsAuthLoading(false);
-        return;
-      }
-      const newUser = data;
 
       localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(newUser));
       setCurrentUser(newUser);
@@ -513,20 +486,14 @@ export default function App() {
           }
 
           let pdfViewUrl = URL.createObjectURL(file);
+          let pdfStorageKey;
           if (currentUser?.uid && !currentUser.uid.startsWith('demo-')) {
             try {
-              const formData = new FormData();
-              formData.append('pdf', file);
-              const uploadRes = await fetch(`${API_BASE}/upload-pdf/${currentUser.uid}`, {
-                method: 'POST',
-                body: formData,
-              });
-              const uploadData = await uploadRes.json();
-              if (uploadRes.ok && uploadData.url) {
-                pdfViewUrl = uploadData.url; // পিসির storage/pdfs ফোল্ডারের লিংক
-              }
+              const saved = await savePdf(currentUser.uid, file);
+              pdfViewUrl = saved.url; // PC: storage/pdfs ফোল্ডারের লিংক | Mobile: ফোনের IndexedDB থেকে
+              pdfStorageKey = saved.storageKey;
             } catch (storageErr) {
-              console.warn('Local PDF upload failed, using temporary blob:', storageErr);
+              console.warn('PDF save failed, using temporary blob:', storageErr);
             }
           }
 
@@ -534,6 +501,7 @@ export default function App() {
           const pdfRecord = {
             id: pdfId,
             url: pdfViewUrl,
+            ...(pdfStorageKey ? { storageKey: pdfStorageKey } : {}),
             name: file.name,
             date: result.detectedDate,
             docType: result.docType
@@ -1536,7 +1504,7 @@ export default function App() {
             )}
 
             <p className="text-center text-xs text-slate-400 mt-6">
-              প্রতিটি ইউজারের ডাটা সম্পূর্ণ আলাদাভাবে সংরক্ষিত থাকে • PostgreSQL Local PC Ready
+              প্রতিটি ইউজারের ডাটা সম্পূর্ণ আলাদাভাবে সংরক্ষিত থাকে • {APP_MODE === 'mobile' ? 'Mobile Offline Ready' : 'PostgreSQL Local PC Ready'}
             </p>
           </div>
         </div>
@@ -1591,7 +1559,7 @@ export default function App() {
 
             <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>PostgreSQL Local PC Mode</span>
+              <span>{APP_MODE === 'mobile' ? 'Mobile Offline Mode' : 'PostgreSQL Local PC Mode'}</span>
             </div>
 
             <button
@@ -1662,6 +1630,16 @@ export default function App() {
                   )}
                 </div>
 
+                {APP_MODE === 'mobile' && (
+                  <a
+                    href={activePdfToDisplay.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mx-3 mb-2 text-center text-xs font-bold text-emerald-700 border border-emerald-200 bg-emerald-50 rounded-lg py-2"
+                  >
+                    PDF আলাদা ট্যাবে খুলুন
+                  </a>
+                )}
                 <iframe
                   key={`${selectedDate}-${activePdfToDisplay.id}`}
                   src={activePdfToDisplay.url}

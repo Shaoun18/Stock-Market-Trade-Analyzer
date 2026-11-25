@@ -2,7 +2,7 @@ name: Deploy Mobile App (GitHub Pages)
 
 on:
   push:
-    branches: [main]
+    branches: [local-development]
   workflow_dispatch:
 
 permissions:

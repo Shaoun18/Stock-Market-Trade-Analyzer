@@ -1,4 +1,4 @@
-# DSE Multi-Brokerage Portfolio & Profit-Loss Tracker (v5.1 – PC + Mobile)
+# DSE Multi-Brokerage Portfolio & Profit-Loss Tracker (v5.2 – PC + Mobile)
 
 একই কোডবেজ, দুই ভার্সন:
 
@@ -44,3 +44,12 @@ Requirements: Node.js 18+, PostgreSQL (localhost:5432)
 ## Demo Login (ব্রাউজার-ওনলি)
 - **Email:** `tanvir@lankabangla.demo`
 - **Password:** `password123`
+
+## v5.2 — কী কী নতুন
+- Full Share table-এ নতুন কলাম: **Buy Cost (Qty × Avg Buy)**, **Market Value (Qty × Mkt Price)**, **Commission (Paid)** + নিচে **TOTAL** সারি
+- নতুন কার্ড: **Account Balance (Cash)** — Portfolio Statement-এর Ledger Balance (+ Statement-এর পরের ট্রেডের হিসাব)
+- **Current Shares / Sold Out** ফিল্টার ও শেয়ারের নামের তালিকা
+- PDF-এর সাথে ০.০১ টাকার মিসম্যাচ ঠিক: Statement-এর নিজস্ব Total ব্যবহার হয়
+- Statement-এর **পরের** Buy/Sell ট্রেড আর হারায় না (Statement + নতুন ট্রেড মিলিয়ে হিসাব)
+- নতুন ইউজারে আগের ইউজারের "imported PDF" হ্যাশ আর জমা থাকে না
+- Demo account-এর সব সংখ্যা এখন ১৮টি ট্রেড থেকে প্রোগ্রাম দিয়ে হিসাব করা (Holdings, Cash, Profit/Loss সব মিলে যায়)

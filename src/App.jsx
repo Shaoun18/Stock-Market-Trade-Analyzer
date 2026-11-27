@@ -25,7 +25,13 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { DEMO_ACCOUNT, INITIAL_DEMO_TRADES } from './demoData';
+import {
+  DEMO_ACCOUNT,
+  INITIAL_DEMO_TRADES,
+  DEMO_MARKET_PRICES,
+  DEMO_STATEMENT_SNAPSHOTS,
+  DEMO_DATA_VERSION
+} from './demoData';
 import { parseAndValidateTradePdf } from './pdfParser';
 import { APP_MODE, signIn, signUp, loadWorkspace, saveWorkspace, savePdf } from './storage.js';
 import ShareDetailGraph from './ShareDetailGraph';
@@ -36,6 +42,11 @@ const STORAGE_TRADES_PREFIX = 'dse_tracker_trades_v6_';
 const STORAGE_PDF_MAP_PREFIX = 'dse_tracker_pdf_map_v6_';
 const STORAGE_MKT_PREFIX = 'dse_tracker_mkt_v6_';
 const STORAGE_STMT_PREFIX = 'dse_tracker_stmt_v6_';
+const STORAGE_HASH_PREFIX = 'dse_tracker_hashes_v7_';
+const STORAGE_DEMO_VERSION_KEY = 'dse_tracker_demo_version';
+
+const fmt = (n) =>
+  Number(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const COMM_RATE = 0.004; // 40 paisa per 100 Tk (0.40%)
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -116,13 +127,8 @@ export default function App() {
   const [trades, setTrades] = useState([]);
   const [marketPrices, setMarketPrices] = useState({});
   const [statementSnapshots, setStatementSnapshots] = useState({});
-  const [importedHashes, setImportedHashes] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('dse_imported_pdf_hashes_v6') || '[]');
-    } catch {
-      return [];
-    }
-  });
+  const [importedHashes, setImportedHashes] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   const [pdfsByDate, setPdfsByDate] = useState({});
   const [selectedPdfId, setSelectedPdfId] = useState('');
@@ -215,7 +221,7 @@ export default function App() {
       localStorage.setItem(STORAGE_TRADES_PREFIX + uid, JSON.stringify(nextTrades));
       localStorage.setItem(STORAGE_MKT_PREFIX + uid, JSON.stringify(nextMarketPrices));
       localStorage.setItem(STORAGE_STMT_PREFIX + uid, JSON.stringify(nextSnapshots || {}));
-      localStorage.setItem('dse_imported_pdf_hashes_v6', JSON.stringify(nextHashes));
+      localStorage.setItem(STORAGE_HASH_PREFIX + uid, JSON.stringify(nextHashes));
       return;
     }
 
@@ -256,15 +262,14 @@ export default function App() {
         loadedMkt = JSON.parse(localStorage.getItem(STORAGE_MKT_PREFIX + uid) || '{}');
         loadedPdfs = normalizePdfMap(JSON.parse(localStorage.getItem(STORAGE_PDF_MAP_PREFIX + uid) || '{}'));
         loadedSnapshots = JSON.parse(localStorage.getItem(STORAGE_STMT_PREFIX + uid) || '{}');
+        setImportedHashes(JSON.parse(localStorage.getItem(STORAGE_HASH_PREFIX + uid) || '[]'));
       } else {
         const data = await loadWorkspace(uid);
         loadedTrades = data.trades || [];
         loadedMkt = data.marketPrices || {};
         loadedPdfs = normalizePdfMap(data.pdfsByDate || {});
         loadedSnapshots = data.statementSnapshots || {};
-        if (Array.isArray(data.importedHashes)) {
-          setImportedHashes(data.importedHashes);
-        }
+        setImportedHashes(Array.isArray(data.importedHashes) ? data.importedHashes : []);
       }
     } catch (err) {
       console.error('Storage load error:', err);
@@ -301,9 +306,15 @@ export default function App() {
     }
     localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
 
-    const tanvirTradesKey = STORAGE_TRADES_PREFIX + DEMO_ACCOUNT.uid;
-    if (!localStorage.getItem(tanvirTradesKey)) {
-      localStorage.setItem(tanvirTradesKey, JSON.stringify(INITIAL_DEMO_TRADES));
+    // ডেমো ডাটা (ট্রেড + বাজারদর + Portfolio Statement) — ভার্সন বদলালে নিজে থেকে নতুন ডাটা বসে
+    if (localStorage.getItem(STORAGE_DEMO_VERSION_KEY) !== DEMO_DATA_VERSION) {
+      const du = DEMO_ACCOUNT.uid;
+      localStorage.setItem(STORAGE_TRADES_PREFIX + du, JSON.stringify(INITIAL_DEMO_TRADES));
+      localStorage.setItem(STORAGE_MKT_PREFIX + du, JSON.stringify(DEMO_MARKET_PRICES));
+      localStorage.setItem(STORAGE_STMT_PREFIX + du, JSON.stringify(DEMO_STATEMENT_SNAPSHOTS));
+      localStorage.setItem(STORAGE_PDF_MAP_PREFIX + du, JSON.stringify({}));
+      localStorage.setItem(STORAGE_HASH_PREFIX + du, JSON.stringify([]));
+      localStorage.setItem(STORAGE_DEMO_VERSION_KEY, DEMO_DATA_VERSION);
     }
 
     const savedSession = localStorage.getItem(STORAGE_SESSION_KEY);
@@ -399,9 +410,10 @@ export default function App() {
       setMarketPrices({});
       setPdfsByDate({});
       setStatementSnapshots({});
+      setImportedHashes([]);
       setSelectedDate(new Date().toISOString().split('T')[0]);
 
-      await syncWorkspaceToCloud(newUser.uid, newUser, [], {}, importedHashes, {}, {});
+      await syncWorkspaceToCloud(newUser.uid, newUser, [], {}, [], {}, {});
 
       setSignupName('');
       setSignupClientCode('');
@@ -473,6 +485,10 @@ export default function App() {
               holdings: result.holdings,
               totalDeposit: result.totalDeposit,
               ledgerBalance: result.ledgerBalance,
+              availableBalance: result.availableBalance,
+              purchasePower: result.purchasePower,
+              statementTotalCost: result.statementTotalCost,
+              statementTotalMarketValue: result.statementTotalMarketValue,
               statementRealized: result.statementRealized,
               statementUnrealized: result.statementUnrealized,
               statementNetGain: result.statementNetGain
@@ -662,6 +678,8 @@ export default function App() {
   const fullShareHoldings = useMemo(() => {
     const map = {};
     const chronological = [...trades].sort((a, b) => a.date.localeCompare(b.date));
+    // Portfolio Statement-এর তারিখের পরের ট্রেডগুলো আলাদা করে হিসাবে যোগ হবে (যাতে নতুন Buy/Sell হারিয়ে না যায়)
+    const snapDate = latestStatementSnapshot?.date || null;
 
     for (const tr of chronological) {
       const sym = tr.instrument.toUpperCase();
@@ -683,13 +701,17 @@ export default function App() {
           buyDates: [],
           sellDates: [],
           realizedProfit: 0,
-          historyPoints: []
+          historyPoints: [],
+          postBuyQty: 0,
+          postBuyCost: 0,
+          postSellQty: 0
         };
       }
 
       const item = map[sym];
       item.group = tr.group || item.group;
       const qty = Number(tr.qty);
+      const isPostSnapshot = Boolean(snapDate && tr.date > snapDate);
 
       if (tr.type === 'BUY') {
         const buyRate = Number(tr.buyPrice);
@@ -704,6 +726,10 @@ export default function App() {
         item.remainingQty += qty;
         item.totalBuyGross += gross;
         item.totalBuyCost += gross + comm;
+        if (isPostSnapshot) {
+          item.postBuyQty += qty;
+          item.postBuyCost += gross + comm;
+        }
         item.latestMarketPrice = marketPrices[sym] || buyRate;
         if (!item.buyDates.includes(tr.date)) {
           item.buyDates.push(tr.date);
@@ -726,6 +752,7 @@ export default function App() {
         const sellNetProceeds = gross - comm;
         const costOfSoldSharesWithComm = qty * avgBuyCostPerShareWithComm;
 
+        if (isPostSnapshot) item.postSellQty += qty;
         item.totalSoldQty += qty;
         item.remainingQty = Math.max(0, item.remainingQty - qty);
         item.totalSellGross += gross;
@@ -775,13 +802,26 @@ export default function App() {
             ]
           };
         } else {
-          map[sym].group = h.group || map[sym].group;
-          map[sym].remainingQty = h.qty;
-          map[sym].latestMarketPrice = h.marketPrice;
-          map[sym].statementAvgCost = h.avgCostWithComm;
-          map[sym].statementActiveCost = h.totalCostWithComm;
-          map[sym].statementMarketValue = h.marketValue;
-          map[sym].statementUnrealized = h.unrealizedGainLoss;
+          const it = map[sym];
+          it.group = h.group || it.group;
+          const remaining = Math.max(0, h.qty + it.postBuyQty - it.postSellQty);
+          it.remainingQty = remaining;
+          if (it.postBuyQty === 0 && it.postSellQty === 0) {
+            it.latestMarketPrice = h.marketPrice;
+            it.statementAvgCost = h.avgCostWithComm;
+            it.statementActiveCost = h.totalCostWithComm;
+            it.statementMarketValue = h.marketValue;
+            it.statementUnrealized = h.unrealizedGainLoss;
+          } else {
+            // Statement-এর পরে নতুন ট্রেড হয়েছে → Statement + নতুন ট্রেড মিলিয়ে হিসাব
+            const rawCost = h.totalCostWithComm + it.postBuyCost - it.postSellQty * h.avgCostWithComm;
+            const activeCost = remaining > 0 ? Math.max(0, rawCost) : 0;
+            it.latestMarketPrice = marketPrices[sym] || h.marketPrice;
+            it.statementAvgCost = remaining > 0 ? activeCost / remaining : h.avgCostWithComm;
+            it.statementActiveCost = activeCost;
+            it.statementMarketValue = remaining * it.latestMarketPrice;
+            it.statementUnrealized = it.statementMarketValue - activeCost;
+          }
         }
       }
 
@@ -855,24 +895,53 @@ export default function App() {
       );
   }, [trades, marketPrices, latestStatementSnapshot, searchQuery]);
 
+  // Statement-এর পরে কোনো নতুন ট্রেড আছে কিনা
+  const hasPostSnapshotTrades = useMemo(() => {
+    if (!latestStatementSnapshot) return false;
+    return trades.some((t) => t.date > latestStatementSnapshot.date);
+  }, [trades, latestStatementSnapshot]);
+
   // Top KPI cards strictly bound to the latest PDF statement & chronological trades
   const portfolioSummary = useMemo(() => {
-    let totalActiveCost = 0;
-    let totalActiveMarketValue = 0;
+    let sumCost = 0;
+    let sumMarketValue = 0;
     let computedRealized = 0;
     let computedUnrealized = 0;
 
     for (const row of fullShareHoldings) {
-      totalActiveCost += row.activeCost;
-      totalActiveMarketValue += row.activeMarketValue;
+      sumCost += row.activeCost;
+      sumMarketValue += row.activeMarketValue;
       computedRealized += row.realizedProfit;
       computedUnrealized += row.unrealizedProfit;
+    }
+
+    // প্রতিটি সারি আলাদাভাবে রাউন্ড হওয়ায় যোগফলে ০.০১ মিসম্যাচ হতে পারে।
+    // তাই Statement-এর নিজস্ব Total (বা Market Value − Unrealized) থাকলে সেটাই ব্যবহার হয় — PDF-এর সাথে হুবহু মিলবে।
+    let totalActiveCost = sumCost;
+    let totalActiveMarketValue = sumMarketValue;
+    const snap = latestStatementSnapshot;
+    if (snap && !searchQuery.trim() && !hasPostSnapshotTrades) {
+      let refCost = null;
+      let refMv = null;
+      if (snap.statementTotalCost > 0) {
+        refCost = snap.statementTotalCost;
+        refMv = snap.statementTotalMarketValue ?? sumMarketValue;
+      } else if (snap.statementUnrealized !== null && snap.statementUnrealized !== undefined) {
+        refMv = sumMarketValue;
+        refCost = sumMarketValue - snap.statementUnrealized;
+      }
+      if (refCost !== null && Math.abs(refCost - sumCost) < 0.15 && Math.abs(refMv - sumMarketValue) < 0.15) {
+        totalActiveCost = refCost;
+        totalActiveMarketValue = refMv;
+      }
     }
 
     const totalNetProfit =
       latestStatementSnapshot &&
         latestStatementSnapshot.statementNetGain !== null &&
-        !searchQuery.trim()
+        latestStatementSnapshot.statementNetGain !== undefined &&
+        !searchQuery.trim() &&
+        !hasPostSnapshotTrades
         ? latestStatementSnapshot.statementNetGain
         : Number((computedRealized + computedUnrealized).toFixed(2));
 
@@ -883,7 +952,61 @@ export default function App() {
       totalNetProfit,
       netPct
     };
-  }, [fullShareHoldings, latestStatementSnapshot, searchQuery]);
+  }, [fullShareHoldings, latestStatementSnapshot, searchQuery, hasPostSnapshotTrades]);
+
+  // Account Balance (Cash): Statement-এর Ledger Balance + Statement-এর পরের ট্রেডের নগদ প্রভাব
+  const cashBalanceInfo = useMemo(() => {
+    if (!latestStatementSnapshot || typeof latestStatementSnapshot.ledgerBalance !== 'number') return null;
+    let amount = latestStatementSnapshot.ledgerBalance;
+    let adjusted = false;
+    for (const t of trades) {
+      if (t.date > latestStatementSnapshot.date) {
+        const gross = Number(t.qty) * Number(t.type === 'BUY' ? t.buyPrice : t.sellPrice);
+        const comm = Number(t.commission) > 0 ? Number(t.commission) : gross * COMM_RATE;
+        amount += t.type === 'BUY' ? -(gross + comm) : gross - comm;
+        adjusted = true;
+      }
+    }
+    return {
+      amount: Number(amount.toFixed(2)),
+      asOf: latestStatementSnapshot.date,
+      adjusted,
+      purchasePower:
+        typeof latestStatementSnapshot.purchasePower === 'number' && !adjusted
+          ? latestStatementSnapshot.purchasePower
+          : null
+    };
+  }, [latestStatementSnapshot, trades]);
+
+  // Current (holding) vs Sold-out shares
+  const shareStatusGroups = useMemo(() => {
+    const active = fullShareHoldings.filter((r) => r.remainingQty > 0);
+    const soldOut = fullShareHoldings.filter((r) => r.remainingQty === 0);
+    return { active, soldOut };
+  }, [fullShareHoldings]);
+
+  const visibleHoldings = useMemo(() => {
+    if (statusFilter === 'ACTIVE') return shareStatusGroups.active;
+    if (statusFilter === 'SOLD') return shareStatusGroups.soldOut;
+    return fullShareHoldings;
+  }, [statusFilter, shareStatusGroups, fullShareHoldings]);
+
+  const holdingsFooter = useMemo(() => {
+    const activeRows = visibleHoldings.filter((r) => r.remainingQty > 0);
+    const useSummary = statusFilter === 'ALL';
+    return {
+      invested: useSummary
+        ? portfolioSummary.totalActiveCost
+        : activeRows.reduce((a, r) => a + r.activeCost, 0),
+      value: useSummary
+        ? portfolioSummary.totalActiveMarketValue
+        : activeRows.reduce((a, r) => a + r.activeMarketValue, 0),
+      commission: visibleHoldings.reduce((a, r) => a + r.totalCommission, 0),
+      net: useSummary
+        ? portfolioSummary.totalNetProfit
+        : visibleHoldings.reduce((a, r) => a + r.totalNetProfit, 0)
+    };
+  }, [visibleHoldings, statusFilter, portfolioSummary]);
 
   const perDayTrades = useMemo(() => {
     return trades.filter((tr) => {
@@ -1670,8 +1793,10 @@ export default function App() {
         >
           {/* Sticky Top Section on Desktop: KPI Cards + Date/Search/Upload Controls + Tabs */}
           <div className="lg:sticky lg:top-[4.25rem] z-20 bg-slate-50/95 backdrop-blur-sm pb-2 space-y-3 sm:space-y-4">
-            {/* Top 4 KPI Cards — Always synced to the LATEST PDF date */}
-            <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+            {/* Top 5 KPI Cards — Always synced to the LATEST PDF date */}
+            <section
+              className={`grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 ${showLeftPdf ? 'xl:grid-cols-3' : 'xl:grid-cols-5'}`}
+            >
               <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm min-w-0">
                 <p className="text-[11px] font-medium text-slate-500 mb-0.5">Active Investor Account</p>
                 <p className="text-base sm:text-lg font-bold text-slate-900 truncate">{currentUser.name}</p>
@@ -1696,6 +1821,29 @@ export default function App() {
                   })}
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5 truncate">Auto-synced from latest Portfolio PDF</p>
+              </div>
+
+              <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm min-w-0">
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                  <p className="text-[11px] font-medium text-slate-500">Account Balance (Cash)</p>
+                  {cashBalanceInfo && (
+                    <span className="px-2 py-0.5 rounded bg-sky-50 text-[10px] font-semibold text-sky-700 truncate">
+                      {cashBalanceInfo.adjusted ? 'Est. incl. new trades' : `As of: ${cashBalanceInfo.asOf}`}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xl sm:text-2xl font-bold text-sky-700">
+                  {cashBalanceInfo ? `৳${fmt(cashBalanceInfo.amount)}` : '—'}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                  {cashBalanceInfo
+                    ? cashBalanceInfo.purchasePower !== null
+                      ? `Purchase power: ৳${fmt(cashBalanceInfo.purchasePower)}`
+                      : cashBalanceInfo.adjusted
+                        ? 'Statement balance + trades after it'
+                        : 'Ledger balance from Portfolio PDF'
+                    : 'Portfolio Statement PDF আপলোড করলে দেখাবে'}
+                </p>
               </div>
 
               <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm min-w-0">
@@ -1753,7 +1901,7 @@ export default function App() {
                   </span>
                 </p>
                 <p className="text-[11px] text-slate-500 mt-0.5 truncate">
-                  Includes 0.40% Buy &amp; Sell commission • Click share for chart
+                  Cost incl. 0.40% buy commission • Realized after sell commission
                 </p>
               </div>
             </section>
@@ -2014,8 +2162,67 @@ export default function App() {
                 </p>
               </div>
 
+              {/* Current vs Sold-out shares */}
+              <div className="px-4 sm:px-6 py-3 border-b border-slate-100 bg-slate-50/60 space-y-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { key: 'ALL', label: `All Shares (${fullShareHoldings.length})` },
+                    { key: 'ACTIVE', label: `Current Shares (${shareStatusGroups.active.length})` },
+                    { key: 'SOLD', label: `Sold Out (${shareStatusGroups.soldOut.length})` }
+                  ].map((chip) => (
+                    <button
+                      key={chip.key}
+                      type="button"
+                      onClick={() => setStatusFilter(chip.key)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${statusFilter === chip.key
+                        ? 'bg-[#0B2B4C] text-white border-[#0B2B4C]'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-bold text-sky-700">Current:</span>
+                    {shareStatusGroups.active.length === 0 ? (
+                      <span className="text-slate-400">—</span>
+                    ) : (
+                      shareStatusGroups.active.map((r) => (
+                        <button
+                          key={r.instrument}
+                          type="button"
+                          onClick={() => setSelectedChartSymbol(r.instrument)}
+                          className="px-2 py-0.5 rounded bg-sky-100 text-sky-800 font-semibold hover:bg-sky-200"
+                        >
+                          {r.instrument}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-bold text-purple-700">Sold Out:</span>
+                    {shareStatusGroups.soldOut.length === 0 ? (
+                      <span className="text-slate-400">—</span>
+                    ) : (
+                      shareStatusGroups.soldOut.map((r) => (
+                        <button
+                          key={r.instrument}
+                          type="button"
+                          onClick={() => setSelectedChartSymbol(r.instrument)}
+                          className="px-2 py-0.5 rounded bg-purple-100 text-purple-800 font-semibold hover:bg-purple-200"
+                        >
+                          {r.instrument}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[780px]">
+                <table className="w-full text-left border-collapse min-w-[1180px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-600">
                       <th className="py-3.5 px-4">Company &amp; Status</th>
@@ -2025,6 +2232,9 @@ export default function App() {
                       <th className="py-3.5 px-3">Sell Date(s)</th>
                       <th className="py-3.5 px-3 text-right">Avg Buy (+0.4%)</th>
                       <th className="py-3.5 px-3 text-right">Sell / Mkt Price</th>
+                      <th className="py-3.5 px-3 text-right">Buy Cost<br /><span className="normal-case font-medium text-slate-400">(Qty × Avg Buy)</span></th>
+                      <th className="py-3.5 px-3 text-right">Market Value<br /><span className="normal-case font-medium text-slate-400">(Qty × Mkt Price)</span></th>
+                      <th className="py-3.5 px-3 text-right">Commission<br /><span className="normal-case font-medium text-slate-400">(Paid)</span></th>
                       <th className="py-3.5 px-3 text-right bg-emerald-50/60 text-emerald-800">
                         Profit / Gain (Green)
                       </th>
@@ -2035,15 +2245,18 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm">
-                    {fullShareHoldings.length === 0 ? (
+                    {visibleHoldings.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="py-12 text-center text-slate-400 text-sm">
+                        <td colSpan={13} className="py-12 text-center text-slate-400 text-sm">
                           কোনো শেয়ার রেকর্ড পাওয়া যায়নি। উপরে "Upload Trade PDF" বাটনে ক্লিক করে ট্রেডিং পিডিএফ আপলোড করুন।
                         </td>
                       </tr>
                     ) : (
-                      fullShareHoldings.map((row) => {
+                      visibleHoldings.map((row) => {
                         const isProfit = row.totalNetProfit >= 0;
+                        const isSoldOutRow = row.status === 'SOLD OUT';
+                        const investedAmt = isSoldOutRow ? row.totalBuyCost : row.activeCost;
+                        const valueAmt = isSoldOutRow ? row.totalSellNetProceeds : row.activeMarketValue;
                         const isSelected = selectedChartSymbol === row.instrument;
                         return (
                           <tr
@@ -2127,6 +2340,29 @@ export default function App() {
                             <td className="py-3.5 px-3 text-right font-semibold text-slate-800">
                               ৳{row.latestMarketPrice.toFixed(2)}
                             </td>
+                            <td className="py-3.5 px-3 text-right">
+                              <div className="font-semibold text-slate-800">৳{fmt(investedAmt)}</div>
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                {isSoldOutRow
+                                  ? `${row.totalBoughtQty} sh. paid (incl. comm)`
+                                  : `${row.remainingQty} × ৳${(investedAmt / Math.max(1, row.remainingQty)).toFixed(4)}`}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-3 text-right">
+                              <div className="font-semibold text-slate-800">৳{fmt(valueAmt)}</div>
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                {isSoldOutRow
+                                  ? `${row.totalSoldQty} sh. received (after comm)`
+                                  : `${row.remainingQty} × ৳${row.latestMarketPrice.toFixed(2)}`}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-3 text-right">
+                              <div className="font-semibold text-amber-700">৳{fmt(row.totalCommission)}</div>
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                Buy ৳{fmt(row.buyCommission)}
+                                {row.sellCommission > 0 ? ` · Sell ৳${fmt(row.sellCommission)}` : ''}
+                              </div>
+                            </td>
                             <td className="py-3.5 px-3 text-right bg-emerald-50/30">
                               {isProfit ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
@@ -2166,6 +2402,25 @@ export default function App() {
                       })
                     )}
                   </tbody>
+                  {visibleHoldings.length > 0 && (
+                    <tfoot>
+                      <tr className="bg-slate-50 border-t-2 border-slate-200 text-sm font-bold text-slate-800">
+                        <td className="py-3.5 px-4" colSpan={6}>
+                          TOTAL <span className="text-[11px] font-medium text-slate-500">(Buy Cost &amp; Market Value = current holdings only)</span>
+                        </td>
+                        <td className="py-3.5 px-3 text-right">৳{fmt(holdingsFooter.invested)}</td>
+                        <td className="py-3.5 px-3 text-right">৳{fmt(holdingsFooter.value)}</td>
+                        <td className="py-3.5 px-3 text-right text-amber-700">৳{fmt(holdingsFooter.commission)}</td>
+                        <td className="py-3.5 px-3 text-right bg-emerald-50/40 text-emerald-700">
+                          {holdingsFooter.net >= 0 ? `+৳${fmt(holdingsFooter.net)}` : ''}
+                        </td>
+                        <td className="py-3.5 px-3 text-right bg-rose-50/40 text-rose-700">
+                          {holdingsFooter.net < 0 ? `-৳${fmt(Math.abs(holdingsFooter.net))}` : ''}
+                        </td>
+                        <td className="py-3.5 px-4" />
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
 

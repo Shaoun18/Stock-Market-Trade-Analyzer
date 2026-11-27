@@ -130,8 +130,13 @@ export async function parseAndValidateTradePdf(file) {
       cleanedText.match(/Deposit\s*:\s*([\d,]+\.\d{2})/i);
     const totalDeposit = depositMatch ? parseNum(depositMatch[1]) : 0;
 
-    const ledgerMatch = cleanedText.match(/Ledger Balance\/\(Liabilities\)\s*:\s*([\d,]+\.\d{2})/i);
+    const ledgerMatch = cleanedText.match(/Ledger Balance\s*\/?\s*\(?\s*Liabilities\s*\)?\s*:\s*(\(?[\d,]+\.\d{2}\)?)/i);
     const ledgerBalance = ledgerMatch ? parseNum(ledgerMatch[1]) : 0;
+
+    const availableMatch = cleanedText.match(/Available Balance\s*\(?\s*Loan\s*\)?\s*:\s*(\(?[\d,]+\.\d{2}\)?)/i);
+    const availableBalance = availableMatch ? parseNum(availableMatch[1]) : null;
+    const purchasePowerMatch = cleanedText.match(/Purchase Power\s*:\s*(\(?[\d,]+\.\d{2}\)?)/i);
+    const purchasePower = purchasePowerMatch ? parseNum(purchasePowerMatch[1]) : null;
 
     const realizedMatch = cleanedText.match(/Realized Gain\/\(Loss\)\s*:\s*(\(?[\d,]+\.\d{2}\)?)/i);
     const unrealizedMatch = cleanedText.match(/Unrealized Gain\/\(Loss\)\s*:\s*(\(?[\d,]+\.\d{2}\)?)/i);
@@ -160,6 +165,22 @@ export async function parseAndValidateTradePdf(file) {
       });
     }
 
+    // Statement-এর নিজস্ব "Total:" সারি (Cost, Market Value, Unrealized) — পয়সার রাউন্ডিং মিসম্যাচ এড়াতে এটাই চূড়ান্ত
+    const sumCost = holdings.reduce((a, h) => a + h.totalCostWithComm, 0);
+    const sumMv = holdings.reduce((a, h) => a + h.marketValue, 0);
+    let statementTotalCost = null;
+    let statementTotalMarketValue = null;
+    const totalRowRegex = /Total\s*:?\s*([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(\(?[\d,]+\.\d{2}\)?)/gi;
+    let tm;
+    while ((tm = totalRowRegex.exec(cleanedText)) !== null) {
+      const c = parseNum(tm[1]);
+      const mv = parseNum(tm[2]);
+      if (holdings.length > 0 && Math.abs(c - sumCost) < 1 && Math.abs(mv - sumMv) < 1) {
+        statementTotalCost = c;
+        statementTotalMarketValue = mv;
+      }
+    }
+
     const docFingerprint = `${fileHash}|PORTFOLIO|${clientCode}|${statementDate}|${holdings.length}`;
 
     return {
@@ -171,6 +192,10 @@ export async function parseAndValidateTradePdf(file) {
       clientCode,
       totalDeposit,
       ledgerBalance,
+      availableBalance,
+      purchasePower,
+      statementTotalCost,
+      statementTotalMarketValue,
       statementRealized,
       statementUnrealized,
       statementNetGain,

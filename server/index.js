@@ -19,7 +19,7 @@ const pool = new Pool({
   user: 'postgres',
   host: 'localhost',
   database: 'dse_tracker',
-  password: 'shaoun18', // <-- আপনার PostgreSQL পাসওয়ার্ড দিন
+  password: 'YOUR_POSTGRES_PASSWORD', // <-- আপনার PostgreSQL পাসওয়ার্ড দিন
   port: 5432,
 });
 
